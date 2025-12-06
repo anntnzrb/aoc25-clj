@@ -1,5 +1,3 @@
-#!/usr/bin/env bb
-
 (require '[clojure.string :as str]
          '[clojure.test :refer [deftest is run-tests]])
 
@@ -21,10 +19,14 @@
 234234234234278
 818181911112111")
 
-(defn parse-line [line]
+(defn parse-line
+  "Converts a string of digits into a vector of ints."
+  [line]
   (mapv #(Character/digit % 10) line))
 
-(defn parse [input]
+(defn parse
+  "Parses input into a vector of digit vectors (battery banks)."
+  [input]
   (->> input str/split-lines (mapv parse-line)))
 
 ;; ─────────────────────────────────────────────────────────────
@@ -49,7 +51,9 @@
                    (suffix-max (inc i)))))
          (apply max))))
 
-(defn part1 [data]
+(defn part1
+  "Sums max 2-digit joltages from all banks."
+  [data]
   (->> data
        (map max-joltage)
        (reduce +)))
@@ -72,7 +76,9 @@
                            (range k))]
     (reduce (fn [acc d] (+ (* 10 acc) d)) 0 result)))
 
-(defn part2 [data]
+(defn part2
+  "Sums max 12-digit joltages from all banks."
+  [data]
   (->> data
        (map #(max-joltage-k % 12))
        (reduce +)))
@@ -121,7 +127,9 @@
 
 ;; ─────────────────────────────────────────────────────────────
 
-(when (= *file* (System/getProperty "babashka.file"))
+(defn -main
+  "Runs tests and prints solutions for real input."
+  [& _]
   (let [results (run-tests)]
     (when (zero? (+ (:fail results) (:error results)))
       (println "\n✓ Tests pass!")
@@ -129,3 +137,5 @@
         (let [data (parse (slurp "input.in"))]
           (println "Part 1:" (part1 data))
           (println "Part 2:" (part2 data)))))))
+
+(-main)

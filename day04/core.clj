@@ -1,5 +1,3 @@
-#!/usr/bin/env bb
-
 (require '[clojure.string :as str]
          '[clojure.test :refer [deftest is run-tests]])
 
@@ -26,7 +24,9 @@
 .@@@@@@@@.
 @.@.@@@.@.")
 
-(defn parse [input]
+(defn parse
+  "Parses input into a 2D grid of characters."
+  [input]
   (->> input str/split-lines (mapv vec)))
 
 ;; ─────────────────────────────────────────────────────────────
@@ -34,39 +34,54 @@
 ;; ─────────────────────────────────────────────────────────────
 
 (def directions
+  "8-directional neighbor offsets."
   [[-1 -1] [-1 0] [-1 1]
    [0 -1]         [0 1]
    [1 -1]  [1 0]  [1 1]])
 
-(defn roll? [grid [r c]]
+(defn roll?
+  "Returns true if position contains a paper roll (@)."
+  [grid [r c]]
   (= \@ (get-in grid [r c])))
 
-(defn count-adjacent-rolls [grid [r c]]
+(defn count-adjacent-rolls
+  "Counts paper rolls in the 8 neighboring cells."
+  [grid [r c]]
   (->> directions
        (map (fn [[dr dc]] [(+ r dr) (+ c dc)]))
        (filter #(roll? grid %))
        count))
 
-(defn accessible? [grid pos]
+(defn accessible?
+  "Returns true if roll at pos can be accessed (< 4 adjacent rolls)."
+  [grid pos]
   (and (roll? grid pos)
        (< (count-adjacent-rolls grid pos) 4)))
 
-(defn all-positions [grid]
+(defn all-positions
+  "Returns all [row col] positions in the grid."
+  [grid]
   (let [rows (count grid)
         cols (count (first grid))]
     (for [r (range rows)
           c (range cols)]
       [r c])))
 
-(defn part1 [grid]
+(defn part1
+  "Counts currently accessible rolls in the grid."
+  [grid]
   (->> (all-positions grid)
        (filter #(accessible? grid %))
        count))
 
-(defn remove-rolls [grid positions]
+(defn remove-rolls
+  "Replaces rolls at given positions with empty space."
+  [grid positions]
   (reduce (fn [g [r c]] (assoc-in g [r c] \.)) grid positions))
 
-(defn part2 [grid]
+(defn part2
+  "Counts total rolls removed by iteratively removing accessible ones."
+  [grid]
   (loop [g grid
          total 0]
     (let [accessible (->> (all-positions g)
@@ -116,7 +131,9 @@
 
 ;; ─────────────────────────────────────────────────────────────
 
-(when (= *file* (System/getProperty "babashka.file"))
+(defn -main
+  "Runs tests and prints solutions for real input."
+  [& _]
   (let [results (run-tests)]
     (when (zero? (+ (:fail results) (:error results)))
       (println "\n✓ Tests pass!")
@@ -124,3 +141,5 @@
         (let [data (parse (slurp "input.in"))]
           (println "Part 1:" (part1 data))
           (println "Part 2:" (part2 data)))))))
+
+(-main)

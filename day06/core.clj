@@ -1,5 +1,3 @@
-#!/usr/bin/env bb
-
 (require '[clojure.string :as str]
          '[clojure.test :refer [deftest is run-tests]])
 
@@ -22,24 +20,32 @@
   6 98  215 314
 *   +   *   +  ")
 
-(defn transpose [rows]
+(defn transpose
+  "Transposes a 2D vector (rows become columns)."
+  [rows]
   (apply mapv vector rows))
 
-(defn pad-rows [rows]
+(defn pad-rows
+  "Pads all rows to the same length with spaces."
+  [rows]
   (let [max-len (apply max (map count rows))]
     (mapv #(vec (concat % (repeat (- max-len (count %)) \space))) rows)))
 
-(defn column-all-spaces? [col]
+(defn column-all-spaces?
+  "Returns true if column contains only spaces."
+  [col]
   (every? #(= \space %) col))
 
-(defn split-on-space-columns [columns]
+(defn split-on-space-columns
+  "Splits columns into groups separated by all-space columns."
+  [columns]
   (->> columns
        (partition-by column-all-spaces?)
        (remove #(column-all-spaces? (first %)))))
 
-(defn parse-problem [columns]
-  ;; Each column contributes one character per row
-  ;; Last row has the operator, other rows have number digits
+(defn parse-problem
+  "Parses columns into {:op fn :numbers [n...]} for standard math."
+  [columns]
   (let [rows (transpose columns)
         op-row (last rows)
         num-rows (butlast rows)
@@ -53,11 +59,9 @@
     {:op (if (= op \+) + *)
      :numbers (apply concat numbers)}))
 
-(defn parse-problem-cephalopod [columns]
-  ;; Cephalopod math: each column is ONE number (top=most significant, bottom=least)
-  ;; Read columns right-to-left
-  ;; columns is a seq of columns, each column is [row0-char row1-char ... rowN-char]
-  ;; The last row (last element of each column) is the operator row
+(defn parse-problem-cephalopod
+  "Parses columns into {:op fn :numbers [n...]} for cephalopod math (vertical digits, right-to-left)."
+  [columns]
   (let [op-row (mapv last columns)
         op (first (remove #(= \space %) op-row))
         ;; Each column (except operator row) forms one number
@@ -69,14 +73,18 @@
     {:op (if (= op \+) + *)
      :numbers (vec numbers)}))
 
-(defn parse [input]
+(defn parse
+  "Parses worksheet input into problems using standard number reading."
+  [input]
   (let [lines (str/split-lines input)
         rows (pad-rows (mapv vec lines))
         columns (transpose rows)
         problem-groups (split-on-space-columns columns)]
     (mapv parse-problem problem-groups)))
 
-(defn parse2 [input]
+(defn parse2
+  "Parses worksheet input into problems using cephalopod number reading."
+  [input]
   (let [lines (str/split-lines input)
         rows (pad-rows (mapv vec lines))
         columns (transpose rows)
@@ -87,15 +95,21 @@
 ;; Solution
 ;; ─────────────────────────────────────────────────────────────
 
-(defn solve-problem [{:keys [op numbers]}]
+(defn solve-problem
+  "Evaluates a problem by reducing numbers with the operator."
+  [{:keys [op numbers]}]
   (reduce op numbers))
 
-(defn part1 [problems]
+(defn part1
+  "Sums results of all problems."
+  [problems]
   (->> problems
        (map solve-problem)
        (reduce +)))
 
-(defn part2 [problems]
+(defn part2
+  "Sums results of all problems (same as part1, different parsing)."
+  [problems]
   (->> problems
        (map solve-problem)
        (reduce +)))
@@ -138,7 +152,9 @@
 
 ;; ─────────────────────────────────────────────────────────────
 
-(when (= *file* (System/getProperty "babashka.file"))
+(defn -main
+  "Runs tests and prints solutions for real input."
+  [& _]
   (let [results (run-tests)]
     (when (zero? (+ (:fail results) (:error results)))
       (println "\n✓ Tests pass!")
@@ -146,3 +162,5 @@
         (let [input (slurp "input.in")]
           (println "Part 1:" (part1 (parse input)))
           (println "Part 2:" (part2 (parse2 input))))))))
+
+(-main)

@@ -1,5 +1,3 @@
-#!/usr/bin/env bb
-
 (require '[clojure.string :as str]
          '[clojure.test :refer [deftest is run-tests]])
 
@@ -13,8 +11,8 @@
 ;; Part 1: count times dial lands on 0 after a rotation
 ;; Part 2: count ALL times dial passes through 0 (including during rotations)
 
-(def dial-size 100)
-(def start-pos 50)
+(def dial-size "Number of positions on the dial (0-99)." 100)
+(def start-pos "Initial dial position." 50)
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Parsing
@@ -31,26 +29,34 @@ L99
 R14
 L82")
 
-(defn parse-rotation [line]
+(defn parse-rotation
+  "Parses 'L68' or 'R48' into {:dir \\L :dist 68}."
+  [line]
   (let [dir (first line)
         dist (parse-long (subs line 1))]
     {:dir dir :dist dist}))
 
-(defn parse [input]
+(defn parse
+  "Parses input into a vector of rotation instructions."
+  [input]
   (->> input str/split-lines (mapv parse-rotation)))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Solution
 ;; ─────────────────────────────────────────────────────────────
 
-(defn apply-rotation [pos {:keys [dir dist]}]
+(defn apply-rotation
+  "Returns new dial position after applying rotation from pos."
+  [pos {:keys [dir dist]}]
   (let [delta (if (= dir \L) (- dist) dist)]
     (mod (+ pos delta) dial-size)))
 
-(defn part1 [rotations]
+(defn part1
+  "Counts times dial lands on 0 after a rotation."
+  [rotations]
   (->> rotations
        (reductions apply-rotation start-pos)
-       rest  ; skip initial position, only count after rotations
+       rest
        (filter zero?)
        count))
 
@@ -67,7 +73,9 @@ L82")
       (inc (quot (- dist first-k) dial-size))
       0)))
 
-(defn part2 [rotations]
+(defn part2
+  "Counts all times dial passes through 0, including during rotations."
+  [rotations]
   (->> rotations
        (reductions (fn [[pos _] rot]
                      [(apply-rotation pos rot)
@@ -121,7 +129,9 @@ L82")
 
 ;; ─────────────────────────────────────────────────────────────
 
-(when (= *file* (System/getProperty "babashka.file"))
+(defn -main
+  "Runs tests and prints solutions for real input."
+  [& _]
   (let [results (run-tests)]
     (when (zero? (+ (:fail results) (:error results)))
       (println "\n✓ Tests pass!")
@@ -129,3 +139,5 @@ L82")
         (let [data (parse (slurp "input.in"))]
           (println "Part 1:" (part1 data))
           (println "Part 2:" (part2 data)))))))
+
+(-main)

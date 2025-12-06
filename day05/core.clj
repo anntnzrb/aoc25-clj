@@ -1,5 +1,3 @@
-#!/usr/bin/env bb
-
 (require '[clojure.string :as str]
          '[clojure.test :refer [deftest is run-tests]])
 
@@ -27,11 +25,15 @@
 17
 32")
 
-(defn parse-range [line]
+(defn parse-range
+  "Parses 'start-end' into [start end] longs."
+  [line]
   (let [[start end] (str/split line #"-")]
     [(parse-long start) (parse-long end)]))
 
-(defn parse [input]
+(defn parse
+  "Parses input into {:ranges [[s e]...] :ids [id...]}."
+  [input]
   (let [[ranges-section ids-section] (str/split input #"\n\n")
         ranges (->> ranges-section str/split-lines (mapv parse-range))
         ids (->> ids-section str/split-lines (mapv parse-long))]
@@ -41,13 +43,19 @@
 ;; Solution
 ;; ─────────────────────────────────────────────────────────────
 
-(defn in-range? [id [start end]]
+(defn in-range?
+  "Returns true if id is within [start end] inclusive."
+  [id [start end]]
   (and (>= id start) (<= id end)))
 
-(defn fresh? [ranges id]
+(defn fresh?
+  "Returns true if id falls within any range."
+  [ranges id]
   (boolean (some #(in-range? id %) ranges)))
 
-(defn merge-ranges [ranges]
+(defn merge-ranges
+  "Merges overlapping/adjacent ranges into disjoint ranges."
+  [ranges]
   (let [sorted (sort-by first ranges)]
     (reduce (fn [merged [start end]]
               (if (empty? merged)
@@ -59,14 +67,20 @@
             []
             sorted)))
 
-(defn part1 [{:keys [ranges ids]}]
+(defn part1
+  "Counts how many IDs fall within any range."
+  [{:keys [ranges ids]}]
   (let [merged (merge-ranges ranges)]
     (count (filter #(fresh? merged %) ids))))
 
-(defn range-size [[start end]]
+(defn range-size
+  "Returns the count of integers in range [start end] inclusive."
+  [[start end]]
   (inc (- end start)))
 
-(defn part2 [{:keys [ranges]}]
+(defn part2
+  "Counts total unique IDs covered by all ranges."
+  [{:keys [ranges]}]
   (->> ranges
        merge-ranges
        (map range-size)
@@ -113,7 +127,9 @@
 
 ;; ─────────────────────────────────────────────────────────────
 
-(when (= *file* (System/getProperty "babashka.file"))
+(defn -main
+  "Runs tests and prints solutions for real input."
+  [& _]
   (let [results (run-tests)]
     (when (zero? (+ (:fail results) (:error results)))
       (println "\n✓ Tests pass!")
@@ -121,3 +137,5 @@
         (let [data (parse (slurp "input.in"))]
           (println "Part 1:" (part1 data))
           (println "Part 2:" (part2 data)))))))
+
+(-main)
