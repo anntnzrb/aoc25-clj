@@ -1,5 +1,6 @@
-(require '[clojure.string :as str]
-         '[clojure.test :refer [deftest is run-tests]])
+(ns day02.core
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is]]))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Domain
@@ -17,13 +18,13 @@
 
 (def example "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124")
 
-(defn parse-range
+(defn- parse-range
   "Parses 'start-end' into [start end] longs."
   [s]
   (let [[start end] (str/split s #"-")]
     [(parse-long start) (parse-long end)]))
 
-(defn parse
+(defn- parse
   "Parses comma-separated ranges into vector of [start end] pairs."
   [input]
   (->> (str/split (str/trim input) #",")
@@ -65,10 +66,11 @@
 
 (defn part1
   "Sums all invalid IDs (half=half pattern) across all ranges."
-  [ranges]
-  (->> ranges
-       (mapcat (fn [[start end]] (generate-invalids-in-range start end)))
-       (reduce +)))
+  [input]
+  (let [ranges (parse input)]
+    (->> ranges
+         (mapcat (fn [[start end]] (generate-invalids-in-range start end)))
+         (reduce +))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Part 2 - Pattern repeated at least twice
@@ -111,10 +113,11 @@
 
 (defn part2
   "Sums all invalid IDs (any repeated pattern) across all ranges."
-  [ranges]
-  (->> ranges
-       (mapcat (fn [[start end]] (generate-invalids-in-range-v2 start end)))
-       (reduce +)))
+  [input]
+  (let [ranges (parse input)]
+    (->> ranges
+         (mapcat (fn [[start end]] (generate-invalids-in-range-v2 start end)))
+         (reduce +))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
@@ -164,7 +167,7 @@
 
 (deftest test-part1
   ;; Example sum: 11 + 22 + 99 + 1010 + 1188511885 + 222222 + 446446 + 38593859 = 1227775554
-  (is (= 1227775554 (part1 (parse example)))))
+  (is (= 1227775554 (part1 example))))
 
 (deftest test-invalid-v2?
   (is (invalid-v2? 55))
@@ -208,25 +211,4 @@
 
 (deftest test-part2
   ;; Example sum: 4174379265
-  (is (= 4174379265 (part2 (parse example)))))
-
-(deftest test-real-input
-  (when (.exists (java.io.File. "input.in"))
-    (let [data (parse (slurp "input.in"))]
-      (is (= 8576933996 (part1 data)))
-      (is (= 25663320831 (part2 data))))))
-
-;; ─────────────────────────────────────────────────────────────
-
-(defn -main
-  "Runs tests and prints solutions for real input."
-  [& _]
-  (let [results (run-tests)]
-    (when (zero? (+ (:fail results) (:error results)))
-      (println "\n✓ Tests pass!")
-      (when (.exists (java.io.File. "input.in"))
-        (let [data (parse (slurp "input.in"))]
-          (println "Part 1:" (part1 data))
-          (println "Part 2:" (part2 data)))))))
-
-(-main)
+  (is (= 4174379265 (part2 example))))

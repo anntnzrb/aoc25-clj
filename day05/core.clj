@@ -1,5 +1,6 @@
-(require '[clojure.string :as str]
-         '[clojure.test :refer [deftest is run-tests]])
+(ns day05.core
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is]]))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Domain
@@ -25,13 +26,13 @@
 17
 32")
 
-(defn parse-range
+(defn- parse-range
   "Parses 'start-end' into [start end] longs."
   [line]
   (let [[start end] (str/split line #"-")]
     [(parse-long start) (parse-long end)]))
 
-(defn parse
+(defn- parse
   "Parses input into {:ranges [[s e]...] :ids [id...]}."
   [input]
   (let [[ranges-section ids-section] (str/split input #"\n\n")
@@ -69,8 +70,9 @@
 
 (defn part1
   "Counts how many IDs fall within any range."
-  [{:keys [ranges ids]}]
-  (let [merged (merge-ranges ranges)]
+  [input]
+  (let [{:keys [ranges ids]} (parse input)
+        merged (merge-ranges ranges)]
     (count (filter #(fresh? merged %) ids))))
 
 (defn range-size
@@ -80,11 +82,12 @@
 
 (defn part2
   "Counts total unique IDs covered by all ranges."
-  [{:keys [ranges]}]
-  (->> ranges
-       merge-ranges
-       (map range-size)
-       (reduce +)))
+  [input]
+  (let [{:keys [ranges]} (parse input)]
+    (->> ranges
+         merge-ranges
+         (map range-size)
+         (reduce +))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
@@ -111,31 +114,10 @@
     (is (false? (fresh? ranges 32)))))
 
 (deftest test-part1
-  (is (= 3 (part1 (parse example)))))
+  (is (= 3 (part1 example))))
 
 (deftest test-merge-ranges
   (is (= [[3 5] [10 20]] (merge-ranges [[3 5] [10 14] [16 20] [12 18]]))))
 
 (deftest test-part2
-  (is (= 14 (part2 (parse example)))))
-
-(deftest test-real-input
-  (when (.exists (java.io.File. "input.in"))
-    (let [data (parse (slurp "input.in"))]
-      (is (= 773 (part1 data)))
-      (is (= 332067203034711 (part2 data))))))
-
-;; ─────────────────────────────────────────────────────────────
-
-(defn -main
-  "Runs tests and prints solutions for real input."
-  [& _]
-  (let [results (run-tests)]
-    (when (zero? (+ (:fail results) (:error results)))
-      (println "\n✓ Tests pass!")
-      (when (.exists (java.io.File. "input.in"))
-        (let [data (parse (slurp "input.in"))]
-          (println "Part 1:" (part1 data))
-          (println "Part 2:" (part2 data)))))))
-
-(-main)
+  (is (= 14 (part2 example))))

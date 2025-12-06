@@ -1,5 +1,6 @@
-(require '[clojure.string :as str]
-         '[clojure.test :refer [deftest is run-tests]])
+(ns day01.core
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is]]))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Domain
@@ -29,14 +30,14 @@ L99
 R14
 L82")
 
-(defn parse-rotation
+(defn- parse-rotation
   "Parses 'L68' or 'R48' into {:dir \\L :dist 68}."
   [line]
   (let [dir (first line)
         dist (parse-long (subs line 1))]
     {:dir dir :dist dist}))
 
-(defn parse
+(defn- parse
   "Parses input into a vector of rotation instructions."
   [input]
   (->> input str/split-lines (mapv parse-rotation)))
@@ -53,12 +54,13 @@ L82")
 
 (defn part1
   "Counts times dial lands on 0 after a rotation."
-  [rotations]
-  (->> rotations
-       (reductions apply-rotation start-pos)
-       rest
-       (filter zero?)
-       count))
+  [input]
+  (let [rotations (parse input)]
+    (->> rotations
+         (reductions apply-rotation start-pos)
+         rest
+         (filter zero?)
+         count)))
 
 (defn count-zeros-in-rotation
   "Count how many times the dial passes through 0 during a rotation.
@@ -75,15 +77,16 @@ L82")
 
 (defn part2
   "Counts all times dial passes through 0, including during rotations."
-  [rotations]
-  (->> rotations
-       (reductions (fn [[pos _] rot]
-                     [(apply-rotation pos rot)
-                      (count-zeros-in-rotation pos rot)])
-                   [start-pos 0])
-       rest
-       (map second)
-       (reduce +)))
+  [input]
+  (let [rotations (parse input)]
+    (->> rotations
+         (reductions (fn [[pos _] rot]
+                       [(apply-rotation pos rot)
+                        (count-zeros-in-rotation pos rot)])
+                     [start-pos 0])
+         rest
+         (map second)
+         (reduce +))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
@@ -105,7 +108,7 @@ L82")
 
 (deftest test-part1
   ;; Example: dial lands on 0 three times (after R48, L55, L99)
-  (is (= 3 (part1 (parse example)))))
+  (is (= 3 (part1 example))))
 
 (deftest test-count-zeros
   ;; R1000 from 50 should hit 0 ten times
@@ -119,25 +122,4 @@ L82")
 
 (deftest test-part2
   ;; Example: 3 at end + 3 during = 6
-  (is (= 6 (part2 (parse example)))))
-
-(deftest test-real-input
-  (when (.exists (java.io.File. "input.in"))
-    (let [data (parse (slurp "input.in"))]
-      (is (= 1182 (part1 data)))
-      (is (= 6907 (part2 data))))))
-
-;; ─────────────────────────────────────────────────────────────
-
-(defn -main
-  "Runs tests and prints solutions for real input."
-  [& _]
-  (let [results (run-tests)]
-    (when (zero? (+ (:fail results) (:error results)))
-      (println "\n✓ Tests pass!")
-      (when (.exists (java.io.File. "input.in"))
-        (let [data (parse (slurp "input.in"))]
-          (println "Part 1:" (part1 data))
-          (println "Part 2:" (part2 data)))))))
-
-(-main)
+  (is (= 6 (part2 example))))

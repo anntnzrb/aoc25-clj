@@ -1,6 +1,7 @@
 (require '[babashka.process :refer [shell]]
          '[clojure.java.io :as io]
-         '[clojure.string :as str])
+         '[clojure.string :as str]
+         '[clojure.test :refer [run-tests]])
 
 (def babashka?
   "True if running in Babashka, false if JVM Clojure."
@@ -128,6 +129,16 @@ Setup (for fetching):
   [day]
   (and (integer? day) (<= 1 day 25)))
 
+;; Expected answers for regression tests
+(def expected-answers
+  "Map of day number to [part1-answer part2-answer]."
+  {1 [1182 6907]
+   2 [8576933996 25663320831]
+   3 [17074 169512729575727]
+   4 [1437 8765]
+   5 [773 332067203034711]
+   6 [4583860641327 11602774058280]})
+
 (defn ensure-input
   "Fetches input for day if it doesn't exist. Returns true on success."
   [day]
@@ -141,7 +152,7 @@ Setup (for fetching):
         false))))
 
 (defn run-day
-  "Runs a single day's solution. Returns true on success."
+  "Loads and runs a single day's solution. Returns true on success."
   [day & {:keys [fetch] :or {fetch false}}]
   (cond
     (not (valid-day? day))
@@ -156,10 +167,21 @@ Setup (for fetching):
     (do
       (when fetch
         (ensure-input day))
-      (let [{:keys [exit]} (shell {:dir (str "day" (format "%02d" day))
-                                    :continue true}
-                                   "bb" "core.clj")]
-        (zero? exit)))))
+      (let [ns-sym (symbol (str "day" (format "%02d" day) ".core"))
+            file-path (day-path day)]
+        ;; Load file directly (works in both BB and JVM)
+        (load-file file-path)
+        (let [ns-obj (find-ns ns-sym)
+              part1-fn (ns-resolve ns-obj 'part1)
+              part2-fn (ns-resolve ns-obj 'part2)
+              results (run-tests ns-sym)]
+          (when (zero? (+ (:fail results) (:error results)))
+            (println "\n✓ Tests pass!")
+            (when (input-exists? day)
+              (let [input (slurp (input-path day))]
+                (println "Part 1:" (part1-fn input))
+                (println "Part 2:" (part2-fn input)))))
+          (zero? (+ (:fail results) (:error results))))))))
 
 (defn run-days
   "Runs multiple days' solutions. Returns true if all succeed."

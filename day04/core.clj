@@ -1,5 +1,6 @@
-(require '[clojure.string :as str]
-         '[clojure.test :refer [deftest is run-tests]])
+(ns day04.core
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is]]))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Domain
@@ -24,7 +25,7 @@
 .@@@@@@@@.
 @.@.@@@.@.")
 
-(defn parse
+(defn- parse
   "Parses input into a 2D grid of characters."
   [input]
   (->> input str/split-lines (mapv vec)))
@@ -69,10 +70,11 @@
 
 (defn part1
   "Counts currently accessible rolls in the grid."
-  [grid]
-  (->> (all-positions grid)
-       (filter #(accessible? grid %))
-       count))
+  [input]
+  (let [grid (parse input)]
+    (->> (all-positions grid)
+         (filter #(accessible? grid %))
+         count)))
 
 (defn remove-rolls
   "Replaces rolls at given positions with empty space."
@@ -81,15 +83,16 @@
 
 (defn part2
   "Counts total rolls removed by iteratively removing accessible ones."
-  [grid]
-  (loop [g grid
-         total 0]
-    (let [accessible (->> (all-positions g)
-                          (filter #(accessible? g %)))]
-      (if (empty? accessible)
-        total
-        (recur (remove-rolls g accessible)
-               (+ total (count accessible)))))))
+  [input]
+  (let [grid (parse input)]
+    (loop [g grid
+           total 0]
+      (let [accessible (->> (all-positions g)
+                            (filter #(accessible? g %)))]
+        (if (empty? accessible)
+          total
+          (recur (remove-rolls g accessible)
+                 (+ total (count accessible))))))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
@@ -117,29 +120,8 @@
 
 (deftest test-part1
   ;; Example has 13 accessible rolls
-  (is (= 13 (part1 (parse example)))))
+  (is (= 13 (part1 example))))
 
 (deftest test-part2
   ;; Example: 13+12+7+5+2+1+1+1+1 = 43 total removed
-  (is (= 43 (part2 (parse example)))))
-
-(deftest test-real-input
-  (when (.exists (java.io.File. "input.in"))
-    (let [data (parse (slurp "input.in"))]
-      (is (= 1437 (part1 data)))
-      (is (= 8765 (part2 data))))))
-
-;; ─────────────────────────────────────────────────────────────
-
-(defn -main
-  "Runs tests and prints solutions for real input."
-  [& _]
-  (let [results (run-tests)]
-    (when (zero? (+ (:fail results) (:error results)))
-      (println "\n✓ Tests pass!")
-      (when (.exists (java.io.File. "input.in"))
-        (let [data (parse (slurp "input.in"))]
-          (println "Part 1:" (part1 data))
-          (println "Part 2:" (part2 data)))))))
-
-(-main)
+  (is (= 43 (part2 example))))

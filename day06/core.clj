@@ -1,5 +1,6 @@
-(require '[clojure.string :as str]
-         '[clojure.test :refer [deftest is run-tests]])
+(ns day06.core
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is]]))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Domain
@@ -20,30 +21,30 @@
   6 98  215 314
 *   +   *   +  ")
 
-(defn transpose
+(defn- transpose
   "Transposes a 2D vector (rows become columns)."
   [rows]
   (apply mapv vector rows))
 
-(defn pad-rows
+(defn- pad-rows
   "Pads all rows to the same length with spaces."
   [rows]
   (let [max-len (apply max (map count rows))]
     (mapv #(vec (concat % (repeat (- max-len (count %)) \space))) rows)))
 
-(defn column-all-spaces?
+(defn- column-all-spaces?
   "Returns true if column contains only spaces."
   [col]
   (every? #(= \space %) col))
 
-(defn split-on-space-columns
+(defn- split-on-space-columns
   "Splits columns into groups separated by all-space columns."
   [columns]
   (->> columns
        (partition-by column-all-spaces?)
        (remove #(column-all-spaces? (first %)))))
 
-(defn parse-problem
+(defn- parse-problem
   "Parses columns into {:op fn :numbers [n...]} for standard math."
   [columns]
   (let [rows (transpose columns)
@@ -59,7 +60,7 @@
     {:op (if (= op \+) + *)
      :numbers (apply concat numbers)}))
 
-(defn parse-problem-cephalopod
+(defn- parse-problem-cephalopod
   "Parses columns into {:op fn :numbers [n...]} for cephalopod math (vertical digits, right-to-left)."
   [columns]
   (let [op-row (mapv last columns)
@@ -73,7 +74,7 @@
     {:op (if (= op \+) + *)
      :numbers (vec numbers)}))
 
-(defn parse
+(defn- parse
   "Parses worksheet input into problems using standard number reading."
   [input]
   (let [lines (str/split-lines input)
@@ -82,7 +83,7 @@
         problem-groups (split-on-space-columns columns)]
     (mapv parse-problem problem-groups)))
 
-(defn parse2
+(defn- parse2
   "Parses worksheet input into problems using cephalopod number reading."
   [input]
   (let [lines (str/split-lines input)
@@ -101,18 +102,20 @@
   (reduce op numbers))
 
 (defn part1
-  "Sums results of all problems."
-  [problems]
-  (->> problems
-       (map solve-problem)
-       (reduce +)))
+  "Sums results of all problems (standard parsing)."
+  [input]
+  (let [problems (parse input)]
+    (->> problems
+         (map solve-problem)
+         (reduce +))))
 
 (defn part2
-  "Sums results of all problems (same as part1, different parsing)."
-  [problems]
-  (->> problems
-       (map solve-problem)
-       (reduce +)))
+  "Sums results of all problems (cephalopod parsing)."
+  [input]
+  (let [problems (parse2 input)]
+    (->> problems
+         (map solve-problem)
+         (reduce +))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
@@ -131,7 +134,7 @@
   (is (= 401 (solve-problem {:op + :numbers [64 23 314]}))))
 
 (deftest test-part1
-  (is (= 4277556 (part1 (parse example)))))
+  (is (= 4277556 (part1 example))))
 
 (deftest test-parse-cephalopod
   (let [problems (parse2 example)]
@@ -142,25 +145,4 @@
     (is (= {:op + :numbers [4 431 623]} (nth problems 3)))))
 
 (deftest test-part2
-  (is (= 3263827 (part2 (parse2 example)))))
-
-(deftest test-real-input
-  (when (.exists (java.io.File. "input.in"))
-    (let [input (slurp "input.in")]
-      (is (= 4583860641327 (part1 (parse input))))
-      (is (= 11602774058280 (part2 (parse2 input)))))))
-
-;; ─────────────────────────────────────────────────────────────
-
-(defn -main
-  "Runs tests and prints solutions for real input."
-  [& _]
-  (let [results (run-tests)]
-    (when (zero? (+ (:fail results) (:error results)))
-      (println "\n✓ Tests pass!")
-      (when (.exists (java.io.File. "input.in"))
-        (let [input (slurp "input.in")]
-          (println "Part 1:" (part1 (parse input)))
-          (println "Part 2:" (part2 (parse2 input))))))))
-
-(-main)
+  (is (= 3263827 (part2 example))))

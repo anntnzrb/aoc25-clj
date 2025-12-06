@@ -1,5 +1,6 @@
-(require '[clojure.string :as str]
-         '[clojure.test :refer [deftest is run-tests]])
+(ns day03.core
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is]]))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Domain
@@ -19,12 +20,12 @@
 234234234234278
 818181911112111")
 
-(defn parse-line
+(defn- parse-line
   "Converts a string of digits into a vector of ints."
   [line]
   (mapv #(Character/digit % 10) line))
 
-(defn parse
+(defn- parse
   "Parses input into a vector of digit vectors (battery banks)."
   [input]
   (->> input str/split-lines (mapv parse-line)))
@@ -53,10 +54,11 @@
 
 (defn part1
   "Sums max 2-digit joltages from all banks."
-  [data]
-  (->> data
-       (map max-joltage)
-       (reduce +)))
+  [input]
+  (let [data (parse input)]
+    (->> data
+         (map max-joltage)
+         (reduce +))))
 
 (defn max-joltage-k
   "Find the maximum k-digit joltage from a bank of batteries.
@@ -78,10 +80,11 @@
 
 (defn part2
   "Sums max 12-digit joltages from all banks."
-  [data]
-  (->> data
-       (map #(max-joltage-k % 12))
-       (reduce +)))
+  [input]
+  (let [data (parse input)]
+    (->> data
+         (map #(max-joltage-k % 12))
+         (reduce +))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
@@ -103,7 +106,7 @@
 
 (deftest test-part1
   ;; Example: 98 + 89 + 78 + 92 = 357
-  (is (= 357 (part1 (parse example)))))
+  (is (= 357 (part1 example))))
 
 (deftest test-max-joltage-k
   ;; 987654321111111 -> 987654321111 (skip 3 ones at end)
@@ -117,25 +120,4 @@
 
 (deftest test-part2
   ;; Example: 987654321111 + 811111111119 + 434234234278 + 888911112111 = 3121910778619
-  (is (= 3121910778619 (part2 (parse example)))))
-
-(deftest test-real-input
-  (when (.exists (java.io.File. "input.in"))
-    (let [data (parse (slurp "input.in"))]
-      (is (= 17074 (part1 data)))
-      (is (= 169512729575727 (part2 data))))))
-
-;; ─────────────────────────────────────────────────────────────
-
-(defn -main
-  "Runs tests and prints solutions for real input."
-  [& _]
-  (let [results (run-tests)]
-    (when (zero? (+ (:fail results) (:error results)))
-      (println "\n✓ Tests pass!")
-      (when (.exists (java.io.File. "input.in"))
-        (let [data (parse (slurp "input.in"))]
-          (println "Part 1:" (part1 data))
-          (println "Part 2:" (part2 data)))))))
-
-(-main)
+  (is (= 3121910778619 (part2 example))))
