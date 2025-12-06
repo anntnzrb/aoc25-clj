@@ -141,8 +141,7 @@ Setup (for fetching):
 (defn available-days
   "Returns a seq of day numbers (1-25) that have solution files."
   []
-  (->> (range 1 26)
-       (filter day-exists?)))
+  (filter day-exists? (range 1 26)))
 
 
 (defn valid-day?

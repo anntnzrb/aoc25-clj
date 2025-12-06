@@ -99,8 +99,7 @@
   (let [grid (parse input)]
     (loop [g grid
            total 0]
-      (let [accessible (->> (all-positions g)
-                            (filter #(accessible? g %)))]
+      (let [accessible (filter #(accessible? g %) (all-positions g))]
         (if (empty? accessible)
           total
           (recur (remove-rolls g accessible)

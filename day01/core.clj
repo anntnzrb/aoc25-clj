@@ -118,11 +118,11 @@ L82")
   ;; From 11, R8 -> 19
   (is (= 19 (apply-rotation 11 {:dir \R :dist 8})))
   ;; From 19, L19 -> 0
-  (is (= 0 (apply-rotation 19 {:dir \L :dist 19})))
+  (is (zero? (apply-rotation 19 {:dir \L :dist 19})))
   ;; From 5, L10 -> 95 (wraps around)
   (is (= 95 (apply-rotation 5 {:dir \L :dist 10})))
   ;; From 95, R5 -> 0 (wraps around)
-  (is (= 0 (apply-rotation 95 {:dir \R :dist 5}))))
+  (is (zero? (apply-rotation 95 {:dir \R :dist 5}))))
 
 
 (deftest test-part1
@@ -136,7 +136,7 @@ L82")
   ;; L68 from 50 hits 0 once (at step 50)
   (is (= 1 (count-zeros-in-rotation 50 {:dir \L :dist 68})))
   ;; L30 from 82 doesn't hit 0 (would need 82 steps)
-  (is (= 0 (count-zeros-in-rotation 82 {:dir \L :dist 30})))
+  (is (zero? (count-zeros-in-rotation 82 {:dir \L :dist 30})))
   ;; R48 from 52 hits 0 exactly at the end
   (is (= 1 (count-zeros-in-rotation 52 {:dir \R :dist 48}))))
 

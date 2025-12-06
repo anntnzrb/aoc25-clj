@@ -94,7 +94,7 @@
               (let [pattern (subs s 0 pattern-len)
                     repeats (quot len pattern-len)]
                 (and (>= repeats 2)
-                     (= s (apply str (repeat repeats pattern)))))))
+                     (= s (str/join (repeat repeats pattern)))))))
           (range 1 (inc (quot len 2))))))
 
 
@@ -112,7 +112,7 @@
                      max-pattern (dec (long (Math/pow 10 pattern-len)))]
                pattern-num (range min-pattern (inc max-pattern))
                :let [pattern-str (str pattern-num)
-                     invalid-str (apply str (repeat repeats pattern-str))
+                     invalid-str (str/join (repeat repeats pattern-str))
                      invalid-num (parse-long invalid-str)]
                :when (and (>= invalid-num start)
                           (<= invalid-num end))]

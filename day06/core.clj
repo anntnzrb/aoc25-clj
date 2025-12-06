@@ -61,7 +61,7 @@
         op (first (remove #(= \space %) op-row))
         ;; Each row is a line of characters - extract numbers
         numbers (for [row num-rows
-                      :let [s (apply str row)
+                      :let [s (str/join row)
                             nums (re-seq #"\d+" s)]
                       :when (seq nums)]
                   (mapv parse-long nums))]
@@ -77,7 +77,7 @@
         ;; Each column (except operator row) forms one number
         numbers (for [col (reverse columns)  ; right-to-left
                       :let [digits (butlast col)  ; exclude operator row
-                            digit-str (apply str (remove #(= \space %) digits))]
+                            digit-str (str/join (remove #(= \space %) digits))]
                       :when (seq digit-str)]
                   (parse-long digit-str))]
     {:op (if (= op \+) + *)
