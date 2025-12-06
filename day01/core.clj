@@ -1,6 +1,8 @@
 (ns day01.core
-  (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is]]))
+  (:require
+    [clojure.string :as str]
+    [clojure.test :refer [deftest is]]))
+
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Domain
@@ -12,14 +14,22 @@
 ;; Part 1: count times dial lands on 0 after a rotation
 ;; Part 2: count ALL times dial passes through 0 (including during rotations)
 
-(def dial-size "Number of positions on the dial (0-99)." 100)
-(def start-pos "Initial dial position." 50)
+(def dial-size
+  "Number of positions on the dial (0-99)."
+  100)
+
+
+(def start-pos
+  "Initial dial position."
+  50)
+
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Parsing
 ;; ─────────────────────────────────────────────────────────────
 
-(def example "L68
+(def example
+  "L68
 L30
 R48
 L5
@@ -30,6 +40,7 @@ L99
 R14
 L82")
 
+
 (defn- parse-rotation
   "Parses 'L68' or 'R48' into {:dir \\L :dist 68}."
   [line]
@@ -37,10 +48,12 @@ L82")
         dist (parse-long (subs line 1))]
     {:dir dir :dist dist}))
 
+
 (defn- parse
   "Parses input into a vector of rotation instructions."
   [input]
   (->> input str/split-lines (mapv parse-rotation)))
+
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Solution
@@ -52,6 +65,7 @@ L82")
   (let [delta (if (= dir \L) (- dist) dist)]
     (mod (+ pos delta) dial-size)))
 
+
 (defn part1
   "Counts times dial lands on 0 after a rotation."
   [input]
@@ -61,6 +75,7 @@ L82")
          rest
          (filter zero?)
          count)))
+
 
 (defn count-zeros-in-rotation
   "Count how many times the dial passes through 0 during a rotation.
@@ -75,6 +90,7 @@ L82")
       (inc (quot (- dist first-k) dial-size))
       0)))
 
+
 (defn part2
   "Counts all times dial passes through 0, including during rotations."
   [input]
@@ -88,6 +104,7 @@ L82")
          (map second)
          (reduce +))))
 
+
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
 ;; ─────────────────────────────────────────────────────────────
@@ -95,6 +112,7 @@ L82")
 (deftest test-parse
   (is (= {:dir \L :dist 68} (parse-rotation "L68")))
   (is (= {:dir \R :dist 48} (parse-rotation "R48"))))
+
 
 (deftest test-apply-rotation
   ;; From 11, R8 -> 19
@@ -106,9 +124,11 @@ L82")
   ;; From 95, R5 -> 0 (wraps around)
   (is (= 0 (apply-rotation 95 {:dir \R :dist 5}))))
 
+
 (deftest test-part1
   ;; Example: dial lands on 0 three times (after R48, L55, L99)
   (is (= 3 (part1 example))))
+
 
 (deftest test-count-zeros
   ;; R1000 from 50 should hit 0 ten times
@@ -119,6 +139,7 @@ L82")
   (is (= 0 (count-zeros-in-rotation 82 {:dir \L :dist 30})))
   ;; R48 from 52 hits 0 exactly at the end
   (is (= 1 (count-zeros-in-rotation 52 {:dir \R :dist 48}))))
+
 
 (deftest test-part2
   ;; Example: 3 at end + 3 during = 6
