@@ -1,0 +1,6 @@
+{:paths ["."]
+ :deps {org.clojure/clojure {:mvn/version "1.12.0"}
+        clj-http/clj-http {:mvn/version "3.13.0"}
+        babashka/process {:mvn/version "0.5.22"}}
+ :aliases
+ {:run {:main-opts ["-m" "core"]}}}
