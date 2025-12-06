@@ -1,5 +1,4 @@
-(require '[babashka.process :refer [shell]]
-         '[clojure.java.io :as io]
+(require '[clojure.java.io :as io]
          '[clojure.string :as str]
          '[clojure.test :refer [run-tests]])
 
