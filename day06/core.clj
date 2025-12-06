@@ -74,23 +74,14 @@
     {:op (if (= op \+) + *)
      :numbers (vec numbers)}))
 
-(defn- parse
-  "Parses worksheet input into problems using standard number reading."
-  [input]
+(defn- parse-with
+  "Parses worksheet input into problems using the given problem parser."
+  [parser-fn input]
   (let [lines (str/split-lines input)
         rows (pad-rows (mapv vec lines))
         columns (transpose rows)
         problem-groups (split-on-space-columns columns)]
-    (mapv parse-problem problem-groups)))
-
-(defn- parse2
-  "Parses worksheet input into problems using cephalopod number reading."
-  [input]
-  (let [lines (str/split-lines input)
-        rows (pad-rows (mapv vec lines))
-        columns (transpose rows)
-        problem-groups (split-on-space-columns columns)]
-    (mapv parse-problem-cephalopod problem-groups)))
+    (mapv parser-fn problem-groups)))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Solution
@@ -104,25 +95,23 @@
 (defn part1
   "Sums results of all problems (standard parsing)."
   [input]
-  (let [problems (parse input)]
-    (->> problems
-         (map solve-problem)
-         (reduce +))))
+  (->> (parse-with parse-problem input)
+       (map solve-problem)
+       (reduce +)))
 
 (defn part2
   "Sums results of all problems (cephalopod parsing)."
   [input]
-  (let [problems (parse2 input)]
-    (->> problems
-         (map solve-problem)
-         (reduce +))))
+  (->> (parse-with parse-problem-cephalopod input)
+       (map solve-problem)
+       (reduce +)))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
 ;; ─────────────────────────────────────────────────────────────
 
 (deftest test-parse
-  (let [problems (parse example)]
+  (let [problems (parse-with parse-problem example)]
     (is (= 4 (count problems)))
     (is (= {:op * :numbers [123 45 6]} (first problems)))
     (is (= {:op + :numbers [328 64 98]} (second problems)))))
@@ -137,7 +126,7 @@
   (is (= 4277556 (part1 example))))
 
 (deftest test-parse-cephalopod
-  (let [problems (parse2 example)]
+  (let [problems (parse-with parse-problem-cephalopod example)]
     (is (= 4 (count problems)))
     (is (= {:op * :numbers [356 24 1]} (first problems)))       ;; 8544
     (is (= {:op + :numbers [8 248 369]} (second problems)))     ;; 625
