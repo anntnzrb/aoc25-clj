@@ -1,24 +1,10 @@
-(require '[clojure.java.io :as io]
-         '[clojure.string :as str]
-         '[clojure.test :refer [run-tests]])
-
-
-(def babashka?
-  "True if running in Babashka, false if JVM Clojure."
-  (some? (System/getProperty "babashka.version")))
-
-
-(if babashka?
-  (require '[babashka.http-client :as http])
-  (require '[clj-http.client :as http]))
-
-
-(defn http-get
-  "Performs HTTP GET, abstracting differences between BB and JVM HTTP clients."
-  [url opts]
-  (http/get url (if babashka?
-                  opts
-                  (assoc opts :throw-exceptions false))))
+(ns aoc
+  "Advent of Code 2025 solutions."
+  (:require
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [clojure.test :refer [run-tests]]
+    [clj-http.client :as http]))
 
 
 (def year
@@ -58,7 +44,7 @@
 (defn input-path
   "Returns the filesystem path for a day's input file."
   [day]
-  (str (format "day%02d" day) "/input.in"))
+  (str "src/" (format "day%02d" day) ".in"))
 
 
 (defn input-exists?
@@ -71,8 +57,9 @@
   "Fetches puzzle input from AoC API. Requires AOC_SESSION in env."
   [day]
   (let [url (format "%s/%d/day/%d/input" aoc-url year day)
-        response (http-get url {:headers {"Cookie" (str "session=" (get-session))
-                                          "User-Agent" "aoc25-clj"}})]
+        response (http/get url {:headers {"Cookie" (str "session=" (get-session))
+                                          "User-Agent" "aoc25-clj"}
+                                :throw-exceptions false})]
     (if (= 200 (:status response))
       (str/trim-newline (:body response))
       (throw (ex-info (str "Fetch failed: " (:status response)) {:body (:body response)})))))
@@ -93,7 +80,7 @@
 
 (def usage
   "
-Usage: bb core.clj [options] [days...]
+Usage: clj -M:run [options] [days...]
 
 Run Advent of Code 2025 solutions.
 
@@ -112,13 +99,13 @@ Options:
   --fetch-only     Only fetch inputs, don't run solutions
 
 Examples:
-  bb core.clj              Run all available days
-  bb core.clj 1            Run day 1
-  bb core.clj 1 2 3        Run days 1, 2, and 3
-  bb core.clj 1-5          Run days 1 through 5
-  bb core.clj --list       Show available days
-  bb core.clj --fetch 1    Fetch and run day 1
-  bb core.clj --fetch-only Fetch all inputs without running
+  clj -M:run               Run all available days
+  clj -M:run 1             Run day 1
+  clj -M:run 1 2 3         Run days 1, 2, and 3
+  clj -M:run 1-5           Run days 1 through 5
+  clj -M:run --list        Show available days
+  clj -M:run --fetch 1     Fetch and run day 1
+  clj -M:run --fetch-only  Fetch all inputs without running
 
 Setup (for fetching):
   1. Get session cookie from adventofcode.com (DevTools > Application > Cookies)
@@ -129,7 +116,7 @@ Setup (for fetching):
 (defn day-path
   "Returns the path to a day's solution file."
   [day]
-  (str "day" (format "%02d" day) "/core.clj"))
+  (str "src/day" (format "%02d" day) ".clj"))
 
 
 (defn day-exists?
@@ -191,9 +178,9 @@ Setup (for fetching):
     (do
       (when fetch
         (ensure-input day))
-      (let [ns-sym (symbol (str "day" (format "%02d" day) ".core"))
+      (let [ns-sym (symbol (str "day" (format "%02d" day)))
             file-path (day-path day)]
-        ;; Load file directly (works in both BB and JVM)
+        ;; Load file directly
         (load-file file-path)
         (let [ns-obj (find-ns ns-sym)
               part1-fn (ns-resolve ns-obj 'part1)
@@ -290,6 +277,3 @@ Setup (for fetching):
             (println "Error: No valid days specified")
             (println "Run with --help for usage")
             (System/exit 1)))))))
-
-
-(apply -main *command-line-args*)

@@ -1,4 +1,4 @@
-(ns day03.core
+(ns day03
   (:require
     [clojure.string :as str]
     [clojure.test :refer [deftest is]]))

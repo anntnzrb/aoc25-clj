@@ -1,4 +1,4 @@
-(ns day07.core
+(ns day07
   "Day 7: Laboratories - Tachyon beam splitting through quantum manifold."
   (:require
     [clojure.string :as str]
@@ -119,9 +119,3 @@
 
 (deftest test-part2
   (is (= 40 (part2 example))))
-
-
-;; ─────────────────────────────────────────────────────────────
-
-(when (= *file* (System/getProperty "babashka.file"))
-  (run-tests))
