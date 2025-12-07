@@ -1,5 +1,9 @@
 {:paths ["src"]
- :deps {org.clojure/clojure {:mvn/version "1.12.0"}
-        clj-http/clj-http {:mvn/version "3.13.0"}}
+ :deps {org.clojure/clojure {:mvn/version "1.12.3"}
+        clj-http/clj-http {:mvn/version "3.13.1"}}
  :aliases
- {:run {:main-opts ["-m" "aoc"]}}}
+ {:run {:main-opts ["-m" "aoc"]}
+  :lint {:extra-deps {tvaughan/kibit-runner {:mvn/version "1.0.1"}}
+         :main-opts ["-m" "kibit-runner.cmdline" "src"]}
+  :fmt {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.15.6"}}
+        :main-opts ["-m" "cljfmt.main" "fix" "src"]}}}
