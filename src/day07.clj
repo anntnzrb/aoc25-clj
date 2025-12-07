@@ -37,7 +37,7 @@
 .^.^.^.^.^...^.
 ...............")
 
-(defn parse
+(defn- parse
   "Parse input into grid data: {:grid [[char]] :start-col int :height int :width int}"
   [input]
   (let [lines (str/split-lines input)
