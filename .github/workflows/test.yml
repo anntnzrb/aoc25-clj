@@ -12,5 +12,4 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: DeterminateSystems/determinate-nix-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
       - run: nix run nixpkgs#clojure -- -M:run
