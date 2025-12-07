@@ -1,8 +1,7 @@
 (ns day03
   (:require
-    [clojure.string :as str]
-    [clojure.test :refer [deftest is]]))
-
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is]]))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Domain
@@ -23,18 +22,15 @@
 234234234234278
 818181911112111")
 
-
 (defn- parse-line
   "Converts a string of digits into a vector of ints."
   [line]
   (mapv #(Character/digit % 10) line))
 
-
 (defn- parse
   "Parses input into a vector of digit vectors (battery banks)."
   [input]
   (->> input str/split-lines (mapv parse-line)))
-
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Solution
@@ -58,7 +54,6 @@
                    (suffix-max (inc i)))))
          (apply max))))
 
-
 (defn part1
   "Sums max 2-digit joltages from all banks."
   [input]
@@ -66,7 +61,6 @@
     (->> data
          (map max-joltage)
          (reduce +))))
-
 
 (defn max-joltage-k
   "Find the maximum k-digit joltage from a bank of batteries.
@@ -86,7 +80,6 @@
                            (range k))]
     (reduce (fn [acc d] (+ (* 10 acc) d)) 0 result)))
 
-
 (defn part2
   "Sums max 12-digit joltages from all banks."
   [input]
@@ -95,7 +88,6 @@
          (map #(max-joltage-k % 12))
          (reduce +))))
 
-
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
 ;; ─────────────────────────────────────────────────────────────
@@ -103,7 +95,6 @@
 (deftest test-parse
   (is (= [9 8 7 6 5 4 3 2 1 1 1 1 1 1 1] (parse-line "987654321111111")))
   (is (= [[9 8 7] [1 2 3]] (parse "987\n123"))))
-
 
 (deftest test-max-joltage
   ;; 987654321111111 -> 98 (first two are largest)
@@ -115,11 +106,9 @@
   ;; 818181911112111 -> 92 (9 then 2)
   (is (= 92 (max-joltage [8 1 8 1 8 1 9 1 1 1 1 2 1 1 1]))))
 
-
 (deftest test-part1
   ;; Example: 98 + 89 + 78 + 92 = 357
   (is (= 357 (part1 example))))
-
 
 (deftest test-max-joltage-k
   ;; 987654321111111 -> 987654321111 (skip 3 ones at end)
@@ -130,7 +119,6 @@
   (is (= 434234234278 (max-joltage-k [2 3 4 2 3 4 2 3 4 2 3 4 2 7 8] 12)))
   ;; 818181911112111 -> 888911112111 (skip some 1s)
   (is (= 888911112111 (max-joltage-k [8 1 8 1 8 1 9 1 1 1 1 2 1 1 1] 12))))
-
 
 (deftest test-part2
   ;; Example: 987654321111 + 811111111119 + 434234234278 + 888911112111 = 3121910778619

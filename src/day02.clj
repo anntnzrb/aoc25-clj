@@ -1,8 +1,7 @@
 (ns day02
   (:require
-    [clojure.string :as str]
-    [clojure.test :refer [deftest is]]))
-
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is]]))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Domain
@@ -20,13 +19,11 @@
 
 (def example "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124")
 
-
 (defn- parse-range
   "Parses 'start-end' into [start end] longs."
   [s]
   (let [[start end] (str/split s #"-")]
     [(parse-long start) (parse-long end)]))
-
 
 (defn- parse
   "Parses comma-separated ranges into vector of [start end] pairs."
@@ -35,7 +32,6 @@
        (map str/trim)
        (filter seq)
        (mapv parse-range)))
-
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Solution
@@ -49,7 +45,6 @@
     (and (even? len)
          (= (subs s 0 (/ len 2))
             (subs s (/ len 2))))))
-
 
 (defn generate-invalids-in-range
   "Generate all invalid numbers in the given range [start, end].
@@ -70,17 +65,15 @@
           :when (and (>= invalid-num start) (<= invalid-num end))]
       invalid-num)))
 
-
 (defn part1
   "Sums all invalid IDs (half=half pattern) across all ranges."
   [input]
   (let [ranges (parse input)]
     (transduce
-      (mapcat (fn [[start end]] (generate-invalids-in-range start end)))
-      +
-      0
-      ranges)))
-
+     (mapcat (fn [[start end]] (generate-invalids-in-range start end)))
+     +
+     0
+     ranges)))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Part 2 - Pattern repeated at least twice
@@ -98,7 +91,6 @@
                 (and (>= repeats 2)
                      (= s (str/join (repeat repeats pattern)))))))
           (range 1 (inc (quot len 2))))))
-
 
 (defn generate-invalids-in-range-v2
   "Generate all invalid numbers in the given range [start, end] for part 2.
@@ -122,17 +114,15 @@
          (into #{})  ; Remove duplicates (e.g., 1111 = "11"x2 = "1"x4)
          sort)))
 
-
 (defn part2
   "Sums all invalid IDs (any repeated pattern) across all ranges."
   [input]
   (let [ranges (parse input)]
     (transduce
-      (mapcat (fn [[start end]] (generate-invalids-in-range-v2 start end)))
-      +
-      0
-      ranges)))
-
+     (mapcat (fn [[start end]] (generate-invalids-in-range-v2 start end)))
+     +
+     0
+     ranges)))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
@@ -155,8 +145,6 @@
   (is (not (invalid? 1234))) ; first half != second half
   (is (not (invalid? 0101))) ; would have leading zero, not a valid ID
   )
-
-
 (deftest test-generate-invalids
   ;; 11-22 has two invalid IDs: 11 and 22
   (is (= [11 22] (generate-invalids-in-range 11 22)))
@@ -181,11 +169,9 @@
   ;; 2121212118-2121212124 contains no invalid IDs
   (is (= [] (generate-invalids-in-range 2121212118 2121212124))))
 
-
 (deftest test-part1
   ;; Example sum: 11 + 22 + 99 + 1010 + 1188511885 + 222222 + 446446 + 38593859 = 1227775554
   (is (= 1227775554 (part1 example))))
-
 
 (deftest test-invalid-v2?
   (is (invalid-v2? 55))
@@ -202,7 +188,6 @@
   (is (invalid-v2? 2121212121)) ; 21 x5
   (is (not (invalid-v2? 101)))
   (is (not (invalid-v2? 12345))))
-
 
 (deftest test-generate-invalids-v2
   ;; 11-22 still has two invalid IDs: 11 and 22
@@ -227,7 +212,6 @@
   (is (= [824824824] (generate-invalids-in-range-v2 824824821 824824827)))
   ;; 2121212118-2121212124 now has one invalid ID: 2121212121
   (is (= [2121212121] (generate-invalids-in-range-v2 2121212118 2121212124))))
-
 
 (deftest test-part2
   ;; Example sum: 4174379265

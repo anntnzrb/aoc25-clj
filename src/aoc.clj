@@ -1,21 +1,18 @@
 (ns aoc
   "Advent of Code 2025 solutions."
   (:require
-    [clojure.java.io :as io]
-    [clojure.string :as str]
-    [clojure.test :refer [run-tests]]
-    [clj-http.client :as http]))
-
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.test :refer [run-tests]]
+   [clj-http.client :as http]))
 
 (def year
   "Advent of Code year."
   2025)
 
-
 (def aoc-url
   "Base URL for Advent of Code."
   "https://adventofcode.com")
-
 
 (defn read-env
   "Parses a .env file into a map of key-value pairs. Returns nil if file doesn't exist."
@@ -28,7 +25,6 @@
          (filter #(= 2 (count %)))
          (into {}))))
 
-
 (defn get-session
   "Returns AOC_SESSION from ~/.env or .env. Throws if not found."
   []
@@ -40,18 +36,15 @@
       (throw (ex-info "AOC_SESSION not found. Add it to ~/.env or .env" {:type :missing-session})))
     session))
 
-
 (defn input-path
   "Returns the filesystem path for a day's input file."
   [day]
   (str "src/" (format "day%02d" day) ".in"))
 
-
 (defn input-exists?
   "Returns true if the input file for the given day exists."
   [day]
   (.exists (io/file (input-path day))))
-
 
 (defn fetch-input
   "Fetches puzzle input from AoC API. Requires AOC_SESSION in env."
@@ -64,7 +57,6 @@
       (str/trim-newline (:body response))
       (throw (ex-info (str "Fetch failed: " (:status response)) {:body (:body response)})))))
 
-
 (defn get-input
   "Gets input for day, fetching from AoC if not cached. Use :force to re-fetch."
   [day & {:keys [force]}]
@@ -76,7 +68,6 @@
         (let [content (fetch-input day)]
           (spit path content)
           (println (str "Saved: " path)))))))
-
 
 (def usage
   "
@@ -112,30 +103,25 @@ Setup (for fetching):
   2. Add to ~/.env or .env:  AOC_SESSION=your-cookie-value
 ")
 
-
 (defn day-path
   "Returns the path to a day's solution file."
   [day]
   (str "src/day" (format "%02d" day) ".clj"))
-
 
 (defn day-exists?
   "Returns true if a solution file exists for the given day."
   [day]
   (.exists (java.io.File. (day-path day))))
 
-
 (defn available-days
   "Returns a seq of day numbers (1-25) that have solution files."
   []
   (filter day-exists? (range 1 26)))
 
-
 (defn valid-day?
   "Returns true if day is an integer between 1 and 25."
   [day]
   (and (integer? day) (<= 1 day 25)))
-
 
 ;; Expected answers for regression tests
 (def expected-answers
@@ -148,7 +134,6 @@ Setup (for fetching):
    6 [4583860641327 11602774058280]
    7 [1687 390684413472684]})
 
-
 (defn ensure-input
   "Fetches input for day if it doesn't exist. Returns true on success."
   [day]
@@ -160,7 +145,6 @@ Setup (for fetching):
       (catch Exception e
         (println (str "Warning: Could not fetch input: " (.getMessage e)))
         false))))
-
 
 (defn run-day
   "Loads and runs a single day's solution. Returns true on success."
@@ -194,7 +178,6 @@ Setup (for fetching):
                 (println "Part 2:" (part2-fn input)))))
           (zero? (+ (:fail results) (:error results))))))))
 
-
 (defn run-days
   "Runs multiple days' solutions. Returns true if all succeed."
   [days & {:keys [fetch] :or {fetch false}}]
@@ -205,7 +188,6 @@ Setup (for fetching):
                     (run-day day :fetch fetch)))]
     (every? true? results)))
 
-
 (defn parse-day-arg
   "Parses a CLI arg like '1' or '1-5' into a seq of day numbers."
   [arg]
@@ -213,7 +195,6 @@ Setup (for fetching):
     (range (parse-long start) (inc (parse-long end)))
     (when-let [n (parse-long arg)]
       [n])))
-
 
 (defn parse-args
   "Parses CLI args into a sorted seq of unique day numbers."
@@ -223,7 +204,6 @@ Setup (for fetching):
        (filter some?)
        distinct
        sort))
-
 
 (defn list-days
   "Prints all available days to stdout."
@@ -235,7 +215,6 @@ Setup (for fetching):
         (doseq [day days]
           (println (str "  Day " day))))
       (println "No days available yet."))))
-
 
 (defn -main
   "CLI entry point. Parses args and runs appropriate commands."
