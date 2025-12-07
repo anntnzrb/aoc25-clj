@@ -96,13 +96,16 @@
 (defn part2
   "Counts total rolls removed by iteratively removing accessible ones."
   [input]
-  (let [grid (parse input)]
+  (let [grid (parse input)
+        initial-rolls (set (filter #(roll? grid %) (all-positions grid)))]
     (loop [g grid
+           rolls initial-rolls
            total 0]
-      (let [accessible (filter #(accessible? g %) (all-positions g))]
+      (let [accessible (filter #(accessible? g %) rolls)]
         (if (empty? accessible)
           total
           (recur (remove-rolls g accessible)
+                 (reduce disj rolls accessible)
                  (+ total (count accessible))))))))
 
 

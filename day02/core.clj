@@ -75,9 +75,11 @@
   "Sums all invalid IDs (half=half pattern) across all ranges."
   [input]
   (let [ranges (parse input)]
-    (->> ranges
-         (mapcat (fn [[start end]] (generate-invalids-in-range start end)))
-         (reduce +))))
+    (transduce
+      (mapcat (fn [[start end]] (generate-invalids-in-range start end)))
+      +
+      0
+      ranges)))
 
 
 ;; ─────────────────────────────────────────────────────────────
@@ -125,9 +127,11 @@
   "Sums all invalid IDs (any repeated pattern) across all ranges."
   [input]
   (let [ranges (parse input)]
-    (->> ranges
-         (mapcat (fn [[start end]] (generate-invalids-in-range-v2 start end)))
-         (reduce +))))
+    (transduce
+      (mapcat (fn [[start end]] (generate-invalids-in-range-v2 start end)))
+      +
+      0
+      ranges)))
 
 
 ;; ─────────────────────────────────────────────────────────────
