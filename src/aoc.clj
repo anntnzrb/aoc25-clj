@@ -26,14 +26,12 @@
          (into {}))))
 
 (defn get-session
-  "Returns AOC_SESSION from ~/.env or .env. Throws if not found."
+  "Returns AOC_SESSION from .env. Throws if not found."
   []
-  (let [home-env (read-env (io/file (System/getProperty "user.home") ".env"))
-        local-env (read-env (io/file ".env"))
-        session (or (get local-env "AOC_SESSION")
-                    (get home-env "AOC_SESSION"))]
+  (let [env (read-env (io/file ".env"))
+        session (get env "AOC_SESSION")]
     (when-not session
-      (throw (ex-info "AOC_SESSION not found. Add it to ~/.env or .env" {:type :missing-session})))
+      (throw (ex-info "AOC_SESSION not found. Add it to .env" {:type :missing-session})))
     session))
 
 (defn input-path
@@ -100,7 +98,7 @@ Examples:
 
 Setup (for fetching):
   1. Get session cookie from adventofcode.com (DevTools > Application > Cookies)
-  2. Add to ~/.env or .env:  AOC_SESSION=your-cookie-value
+  2. Add to .env:  AOC_SESSION=your-cookie-value
 ")
 
 (defn day-path
