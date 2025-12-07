@@ -1,6 +1,7 @@
 {:paths ["src"]
  :deps {org.clojure/clojure {:mvn/version "1.12.3"}
-        clj-http/clj-http {:mvn/version "3.13.1"}}
+        clj-http/clj-http {:mvn/version "3.13.1"}
+        org.babashka/cli {:mvn/version "0.8.61"}}
  :aliases
  {:run {:main-opts ["-m" "aoc"]}
   :lint {:extra-deps {tvaughan/kibit-runner {:mvn/version "1.0.1"}}

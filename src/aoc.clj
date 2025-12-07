@@ -1,6 +1,7 @@
 (ns aoc
   "Advent of Code 2025 solutions."
   (:require
+   [babashka.cli :as cli]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [run-tests]]
@@ -67,39 +68,14 @@
           (spit path content)
           (println (str "Saved: " path)))))))
 
-(def usage
-  "
-Usage: clj -M:run [options] [days...]
-
-Run Advent of Code 2025 solutions.
-
-Arguments:
-  days    Day number(s) to run (1-25). Supports:
-          - Single day: 1
-          - Multiple days: 1 3 5
-          - Range: 1-5
-          - Mixed: 1 3-5 7
-
-Options:
-  -h, --help       Show this help
-  -l, --list       List available days
-  -a, --all        Run all available days
-  -f, --fetch      Fetch input before running (auto-fetches if missing)
-  --fetch-only     Only fetch inputs, don't run solutions
-
-Examples:
-  clj -M:run               Run all available days
-  clj -M:run 1             Run day 1
-  clj -M:run 1 2 3         Run days 1, 2, and 3
-  clj -M:run 1-5           Run days 1 through 5
-  clj -M:run --list        Show available days
-  clj -M:run --fetch 1     Fetch and run day 1
-  clj -M:run --fetch-only  Fetch all inputs without running
-
-Setup (for fetching):
-  1. Get session cookie from adventofcode.com (DevTools > Application > Cookies)
-  2. Add to .env:  AOC_SESSION=your-cookie-value
-")
+(def cli-spec
+  "CLI options specification for babashka/cli."
+  {:help       {:alias :h :desc "Show this help"}
+   :list       {:alias :l :desc "List available days"}
+   :all        {:alias :a :desc "Run all available days"}
+   :fetch      {:alias :f :desc "Fetch input before running"}
+   :fetch-only {:desc "Only fetch inputs, don't run solutions"}
+   :force      {:desc "Force re-fetch even if cached"}})
 
 (defn day-path
   "Returns the path to a day's solution file."
@@ -186,7 +162,7 @@ Setup (for fetching):
                     (run-day day :fetch fetch)))]
     (every? true? results)))
 
-(defn parse-day-arg
+(defn- parse-day-arg
   "Parses a CLI arg like '1' or '1-5' into a seq of day numbers."
   [arg]
   (if-let [[_ start end] (re-matches #"(\d+)-(\d+)" arg)]
@@ -194,8 +170,8 @@ Setup (for fetching):
     (when-let [n (parse-long arg)]
       [n])))
 
-(defn parse-args
-  "Parses CLI args into a sorted seq of unique day numbers."
+(defn- parse-days
+  "Parses day args into a sorted seq of unique day numbers."
   [args]
   (->> args
        (mapcat parse-day-arg)
@@ -203,7 +179,22 @@ Setup (for fetching):
        distinct
        sort))
 
-(defn list-days
+(defn- print-help
+  "Prints help message."
+  []
+  (println
+   (str "Usage: clj -M:run [options] [days...]
+
+Run Advent of Code 2025 solutions.
+
+Days can be: 1, 1 2 3, 1-5, or mixed (1 3-5 7)
+
+Options:
+" (cli/format-opts {:spec cli-spec}) "
+
+Setup: Add AOC_SESSION=<cookie> to .env")))
+
+(defn- list-days
   "Prints all available days to stdout."
   []
   (let [days (available-days)]
@@ -215,42 +206,28 @@ Setup (for fetching):
       (println "No days available yet."))))
 
 (defn -main
-  "CLI entry point. Parses args and runs appropriate commands."
+  "CLI entry point."
   [& args]
-  (let [fetch? (some #{"-f" "--fetch"} args)
-        fetch-only? (some #{"--fetch-only"} args)
-        force? (some #{"--force"} args)
-        filtered-args (remove #{"-f" "--fetch" "--fetch-only" "--force"} args)]
+  (let [{:keys [opts args]} (cli/parse-args args {:spec cli-spec})
+        {:keys [help list all fetch fetch-only force]} opts
+        days (parse-days args)]
     (cond
-      (some #{"-h" "--help"} args)
-      (println usage)
+      help
+      (print-help)
 
-      (some #{"-l" "--list"} args)
+      list
       (list-days)
 
-      fetch-only?
-      (let [days (if (seq (parse-args filtered-args))
-                   (parse-args filtered-args)
-                   (available-days))]
-        (doseq [day days]
-          (try
-            (get-input day :force force?)
-            (catch Exception e
-              (println (str "Failed to fetch day " day ": " (.getMessage e)))))))
-
-      (or (empty? filtered-args) (some #{"-a" "--all"} filtered-args))
-      (let [days (available-days)]
-        (if (seq days)
-          (when-not (run-days days :fetch fetch?)
-            (System/exit 1))
-          (println "No days available yet.")))
+      fetch-only
+      (doseq [day (if (seq days) days (available-days))]
+        (try
+          (get-input day :force force)
+          (catch Exception e
+            (println (str "Failed to fetch day " day ": " (.getMessage e))))))
 
       :else
-      (let [days (parse-args filtered-args)]
-        (if (seq days)
-          (when-not (run-days days :fetch fetch?)
+      (let [days-to-run (if (or all (empty? days)) (available-days) days)]
+        (if (seq days-to-run)
+          (when-not (run-days days-to-run :fetch fetch)
             (System/exit 1))
-          (do
-            (println "Error: No valid days specified")
-            (println "Run with --help for usage")
-            (System/exit 1)))))))
+          (println "No days available yet."))))))
