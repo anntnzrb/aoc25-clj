@@ -120,37 +120,43 @@
         (println (str "Warning: Could not fetch input: " (.getMessage e)))
         false))))
 
+(defn- load-day-ns
+  "Loads day namespace and returns {:ns :part1 :part2}."
+  [day]
+  (let [ns-sym (symbol (str "day" (format "%02d" day)))]
+    (load-file (day-path day))
+    (let [ns-obj (find-ns ns-sym)]
+      {:ns ns-sym
+       :part1 (ns-resolve ns-obj 'part1)
+       :part2 (ns-resolve ns-obj 'part2)})))
+
+(defn- run-day-solutions
+  "Runs tests and solutions for loaded day. Returns true if tests pass."
+  [{:keys [ns part1 part2]} day]
+  (let [results (run-tests ns)
+        passed? (zero? (+ (:fail results) (:error results)))]
+    (when passed?
+      (println "\n✓ Tests pass!")
+      (when (input-exists? day)
+        (let [input (slurp (input-path day))]
+          (println "Part 1:" (part1 input))
+          (println "Part 2:" (part2 input)))))
+    passed?))
+
 (defn run-day
   "Loads and runs a single day's solution. Returns true on success."
   [day & {:keys [fetch] :or {fetch false}}]
   (cond
     (not (valid-day? day))
-    (do (println (str "Error: Invalid day " day " (must be 1-25)"))
-        false)
+    (do (println (str "Error: Invalid day " day " (must be 1-25)")) false)
 
     (not (day-exists? day))
-    (do (println (str "Error: Day " day " not found"))
-        false)
+    (do (println (str "Error: Day " day " not found")) false)
 
     :else
     (do
-      (when fetch
-        (ensure-input day))
-      (let [ns-sym (symbol (str "day" (format "%02d" day)))
-            file-path (day-path day)]
-        ;; Load file directly
-        (load-file file-path)
-        (let [ns-obj (find-ns ns-sym)
-              part1-fn (ns-resolve ns-obj 'part1)
-              part2-fn (ns-resolve ns-obj 'part2)
-              results (run-tests ns-sym)]
-          (when (zero? (+ (:fail results) (:error results)))
-            (println "\n✓ Tests pass!")
-            (when (input-exists? day)
-              (let [input (slurp (input-path day))]
-                (println "Part 1:" (part1-fn input))
-                (println "Part 2:" (part2-fn input)))))
-          (zero? (+ (:fail results) (:error results))))))))
+      (when fetch (ensure-input day))
+      (run-day-solutions (load-day-ns day) day))))
 
 (defn run-days
   "Runs multiple days' solutions. Returns true if all succeed."
