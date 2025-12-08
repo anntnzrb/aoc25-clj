@@ -106,7 +106,8 @@
    4 [1437 8765]
    5 [773 332067203034711]
    6 [4583860641327 11602774058280]
-   7 [1687 390684413472684]})
+   7 [1687 390684413472684]
+   8 [244188 8361881885]})
 
 (defn ensure-input
   "Fetches input for day if it doesn't exist. Returns true on success."
