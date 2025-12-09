@@ -54,33 +54,69 @@
   [x (min y1 y2) (max y1 y2)])
 
 (defn- partition-edges
-  "Separate edges into horizontal [y x1 x2] and vertical [x y1 y2]."
+  "Separate edges into horizontal [y x1 x2] and vertical [x y1 y2].
+   H-edges sorted by y, V-edges sorted by x for binary search."
   [edges]
   (let [h-edge? (fn [[[_ y1] [_ y2]]] (= y1 y2))
         v-edge? (fn [[[x1 _] [x2 _]]] (= x1 x2))]
-    [(mapv normalize-h-edge (filter h-edge? edges))
-     (mapv normalize-v-edge (filter v-edge? edges))]))
+    [(vec (sort-by first (map normalize-h-edge (filter h-edge? edges))))
+     (vec (sort-by first (map normalize-v-edge (filter v-edge? edges))))]))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Ray Casting
 ;; ─────────────────────────────────────────────────────────────
 
+(defn- binary-search-gt
+  "Find index of first element in sorted vec where (first elem) > target."
+  [v target]
+  (let [n (count v)]
+    (loop [lo 0 hi n]
+      (if (>= lo hi)
+        lo
+        (let [mid (quot (+ lo hi) 2)]
+          (if (> (first (v mid)) target)
+            (recur lo mid)
+            (recur (inc mid) hi)))))))
+
 (defn- on-h-boundary?
-  "Check if point lies on any horizontal boundary edge."
+  "Check if point lies on any horizontal boundary edge.
+   Uses binary search since h-edges are sorted by y."
   [h-edges px py]
-  (some (fn [[y x1 x2]] (and (= py y) (<= x1 px x2))) h-edges))
+  (let [n (count h-edges)
+        ;; Find edges where y = py
+        idx (binary-search-gt h-edges (dec py))]
+    (loop [i idx]
+      (when (< i n)
+        (let [[y x1 x2] (h-edges i)]
+          (cond
+            (> y py) false
+            (and (= y py) (<= x1 px x2)) true
+            :else (recur (inc i))))))))
 
 (defn- on-v-boundary?
-  "Check if point lies on any vertical boundary edge."
+  "Check if point lies on any vertical boundary edge.
+   Uses binary search since v-edges are sorted by x."
   [v-edges px py]
-  (some (fn [[x y1 y2]] (and (= px x) (<= y1 py y2))) v-edges))
+  (let [n (count v-edges)
+        idx (binary-search-gt v-edges (dec px))]
+    (loop [i idx]
+      (when (< i n)
+        (let [[x y1 y2] (v-edges i)]
+          (cond
+            (> x px) false
+            (and (= x px) (<= y1 py y2)) true
+            :else (recur (inc i))))))))
 
 (defn- ray-crossing-count
-  "Count vertical edges crossed by rightward ray from point."
+  "Count vertical edges crossed by rightward ray from point.
+   Uses binary search since v-edges are sorted by x."
   [v-edges px py]
-  (->> v-edges
-       (filter (fn [[x y1 y2]] (and (> x px) (< y1 py y2))))
-       count))
+  (let [start-idx (binary-search-gt v-edges px)]
+    (loop [i start-idx cnt 0]
+      (if (>= i (count v-edges))
+        cnt
+        (let [[_ y1 y2] (v-edges i)]
+          (recur (inc i) (if (< y1 py y2) (inc cnt) cnt)))))))
 
 (defn- point-inside?
   "Check if point is inside polygon using ray casting."
@@ -94,14 +130,32 @@
 ;; ─────────────────────────────────────────────────────────────
 
 (defn- v-edge-crosses-h-segment?
-  "Check if any vertical edge crosses through horizontal segment."
+  "Check if any vertical edge crosses through horizontal segment.
+   Uses binary search since v-edges are sorted by x."
   [v-edges lx hx y]
-  (some (fn [[x y1 y2]] (and (< lx x hx) (< y1 y y2))) v-edges))
+  (let [start-idx (binary-search-gt v-edges lx)
+        n (count v-edges)]
+    (loop [i start-idx]
+      (when (< i n)
+        (let [[x y1 y2] (v-edges i)]
+          (cond
+            (>= x hx) false
+            (< y1 y y2) true
+            :else (recur (inc i))))))))
 
 (defn- h-edge-crosses-v-segment?
-  "Check if any horizontal edge crosses through vertical segment."
+  "Check if any horizontal edge crosses through vertical segment.
+   Uses binary search since h-edges are sorted by y."
   [h-edges ly hy x]
-  (some (fn [[y x1 x2]] (and (< ly y hy) (< x1 x x2))) h-edges))
+  (let [start-idx (binary-search-gt h-edges ly)
+        n (count h-edges)]
+    (loop [i start-idx]
+      (when (< i n)
+        (let [[y x1 x2] (h-edges i)]
+          (cond
+            (>= y hy) false
+            (< x1 x x2) true
+            :else (recur (inc i))))))))
 
 (defn- rectangle-inside?
   "Check if rectangle is fully inside polygon."
@@ -149,15 +203,20 @@
       0)))
 
 (defn- max-valid-rectangle
-  "Find max rectangle area with red corners fully inside polygon."
+  "Find max rectangle area with red corners fully inside polygon.
+   Sorts pairs by area descending for early termination."
   [red-tiles]
   (let [[h-edges v-edges] (partition-edges (polygon-edges red-tiles))
-        pairs (for [i (range (count red-tiles))
-                    j (range (inc i) (count red-tiles))]
-                [(red-tiles i) (red-tiles j)])]
-    (->> pairs
-         (map (partial valid-rectangle-area h-edges v-edges))
-         (reduce max 0))))
+        pairs (sort-by (fn [[p1 p2]] (- (rectangle-area p1 p2)))
+                       (for [i (range (count red-tiles))
+                             j (range (inc i) (count red-tiles))]
+                         [(red-tiles i) (red-tiles j)]))]
+    (reduce (fn [best pair]
+              (let [area (valid-rectangle-area h-edges v-edges pair)]
+                (if (pos? area)
+                  (reduced area)  ; First valid = largest (sorted desc)
+                  best)))
+            0 pairs)))
 
 (defn part2
   "Find largest rectangle using only red/green tiles with red corners."
