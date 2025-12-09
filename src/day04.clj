@@ -83,20 +83,38 @@
   [grid positions]
   (reduce (fn [g [r c]] (assoc-in g [r c] \.)) grid positions))
 
+(defn- neighbors
+  "Returns neighbor positions for a given position."
+  [[r c]]
+  (map (fn [[dr dc]] [(+ r dr) (+ c dc)]) directions))
+
+(defn- initial-neighbor-counts
+  "Build map of pos -> count of adjacent rolls for all roll positions."
+  [rolls]
+  (let [roll-set (set rolls)]
+    (into {} (for [pos rolls]
+               [pos (count (filter roll-set (neighbors pos)))]))))
+
 (defn part2
-  "Counts total rolls removed by iteratively removing accessible ones."
+  "Counts total rolls removed by iteratively removing accessible ones.
+   Uses incremental neighbor tracking for efficiency."
   [input]
   (let [grid (parse input)
-        initial-rolls (set (filter #(roll? grid %) (all-positions grid)))]
-    (loop [g grid
-           rolls initial-rolls
-           total 0]
-      (let [accessible (filter #(accessible? g %) rolls)]
+        rolls (filterv #(roll? grid %) (all-positions grid))
+        counts (volatile! (initial-neighbor-counts rolls))
+        remaining (volatile! (set rolls))]
+    (loop [total 0]
+      (let [accessible (filterv #(< (get @counts % 0) 4) @remaining)]
         (if (empty? accessible)
           total
-          (recur (remove-rolls g accessible)
-                 (reduce disj rolls accessible)
-                 (+ total (count accessible))))))))
+          (do
+            ;; Remove accessible rolls and update neighbor counts
+            (doseq [pos accessible]
+              (vswap! remaining disj pos)
+              (doseq [n (neighbors pos)]
+                (when (contains? @remaining n)
+                  (vswap! counts update n dec))))
+            (recur (+ total (count accessible)))))))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
