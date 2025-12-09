@@ -37,57 +37,56 @@
   (mapv #(mapv parse-long (str/split % #",")) (str/split-lines input)))
 
 ;; ─────────────────────────────────────────────────────────────
-;; Union-Find
+;; Union-Find (mutable for performance)
 ;; ─────────────────────────────────────────────────────────────
 
 (defn- make-uf
-  "Create Union-Find structure for n elements."
+  "Create mutable Union-Find structure for n elements."
   [n]
-  {:parent (vec (range n))
-   :rank (vec (repeat n 0))})
+  {:parent (int-array (range n))
+   :rank (int-array n)})
 
-(defn- find-root
-  "Find root of element with path compression. Returns [uf root]."
-  [{:keys [parent] :as uf} x]
-  (let [p (parent x)]
+(defn- find-root!
+  "Find root of element with path compression. Mutates parent array."
+  [{:keys [^ints parent]} x]
+  (let [p (aget parent x)]
     (if (= p x)
-      [uf x]
-      (let [[uf' root] (find-root uf p)]
-        [(assoc-in uf' [:parent x] root) root]))))
+      x
+      (let [root (find-root! {:parent parent} p)]
+        (aset parent x root)
+        root))))
 
-(defn- union
-  "Union two sets. Returns [uf merged?]."
-  [uf a b]
-  (let [[uf' ra] (find-root uf a)
-        [uf'' rb] (find-root uf' b)]
+(defn- union!
+  "Union two sets. Mutates uf. Returns true if merged."
+  [{:keys [^ints parent ^ints rank] :as uf} a b]
+  (let [ra (find-root! uf a)
+        rb (find-root! uf b)]
     (if (= ra rb)
-      [uf'' false]
-      (let [rank-a (get-in uf'' [:rank ra])
-            rank-b (get-in uf'' [:rank rb])
-            uf''' (cond
-                    (< rank-a rank-b)
-                    (assoc-in uf'' [:parent ra] rb)
+      false
+      (let [rank-a (aget rank ra)
+            rank-b (aget rank rb)]
+        (cond
+          (< rank-a rank-b)
+          (aset parent ra rb)
 
-                    (> rank-a rank-b)
-                    (assoc-in uf'' [:parent rb] ra)
+          (> rank-a rank-b)
+          (aset parent rb ra)
 
-                    :else
-                    (-> uf''
-                        (assoc-in [:parent rb] ra)
-                        (update-in [:rank ra] inc)))]
-        [uf''' true]))))
+          :else
+          (do (aset parent rb ra)
+              (aset rank ra (inc rank-a))))
+        true))))
 
 (defn- component-sizes
   "Get sizes of all components."
-  [uf n]
-  (let [uf-final (reduce (fn [u i]
-                           (first (find-root u i)))
-                         uf
-                         (range n))]
-    (->> (range n)
-         (map #(get-in uf-final [:parent %]))
-         frequencies
-         vals)))
+  [{:keys [^ints parent] :as uf} n]
+  ;; Ensure all paths are compressed
+  (doseq [i (range n)]
+    (find-root! uf i))
+  (->> (range n)
+       (map #(aget parent %))
+       frequencies
+       vals))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Solution
@@ -103,55 +102,61 @@
 (defn- all-pairs
   "Generate all pairs with distances, sorted by distance."
   [points]
-  (let [n (count points)]
-    (sort-by #(nth % 2)
-             (for [i (range n)
-                   j (range (inc i) n)]
-               [i j (distance-sq (points i) (points j))]))))
+  (let [n (count points)
+        pairs (object-array
+               (for [i (range n)
+                     j (range (inc i) n)]
+                 (long-array [i j (distance-sq (points i) (points j))])))]
+    (java.util.Arrays/parallelSort
+     pairs
+     (reify java.util.Comparator
+       (compare [_ a b]
+         (Long/compare (aget ^longs a 2) (aget ^longs b 2)))))
+    (vec pairs)))
 
 (defn- solve
   "Connect k closest pairs and return product of 3 largest circuit sizes."
-  [input k]
-  (let [points (parse input)
-        n (count points)
-        pairs (all-pairs points)
-        uf (reduce (fn [u [i j _]] (first (union u i j)))
-                   (make-uf n)
-                   (take k pairs))
-        sizes (->> (component-sizes uf n)
-                   (sort >)
-                   (take 3))]
-    (reduce * sizes)))
+  [points pairs k]
+  (let [n (count points)
+        uf (make-uf n)]
+    (doseq [^longs p (take k pairs)]
+      (union! uf (aget p 0) (aget p 1)))
+    (->> (component-sizes uf n)
+         (sort >)
+         (take 3)
+         (reduce *))))
 
 (defn- find-last-merge
   "Find the last pair that merges two separate circuits. Returns [i j]."
-  [input]
-  (let [points (parse input)
-        n (count points)
-        pairs (all-pairs points)]
-    (loop [uf (make-uf n)
-           remaining pairs
+  [points pairs]
+  (let [n (count points)
+        uf (make-uf n)]
+    (loop [remaining pairs
            components n
            last-merge nil]
       (if (or (= components 1) (empty? remaining))
         last-merge
-        (let [[i j _] (first remaining)
-              [uf' merged?] (union uf i j)]
-          (recur uf'
-                 (rest remaining)
+        (let [^longs p (first remaining)
+              i (aget p 0)
+              j (aget p 1)
+              merged? (union! uf (int i) (int j))]
+          (recur (rest remaining)
                  (if merged? (dec components) components)
                  (if merged? [i j] last-merge)))))))
 
 (defn part1
   "Connect 1000 closest pairs, multiply 3 largest circuit sizes."
   [input]
-  (solve input 1000))
+  (let [points (parse input)
+        pairs (all-pairs points)]
+    (solve points pairs 1000)))
 
 (defn part2
   "Find last merge to form single circuit, return product of X coordinates."
   [input]
   (let [points (parse input)
-        [i j] (find-last-merge input)]
+        pairs (all-pairs points)
+        [i j] (find-last-merge points pairs)]
     (* (first (points i)) (first (points j)))))
 
 ;; ─────────────────────────────────────────────────────────────
@@ -165,7 +170,9 @@
     (is (= [425 690 689] (last points)))))
 
 (deftest test-part1-example
-  (is (= 40 (solve example 10))))
+  (let [points (parse example)
+        pairs (all-pairs points)]
+    (is (= 40 (solve points pairs 10)))))
 
 (deftest test-part2-example
   (is (= 25272 (part2 example))))
