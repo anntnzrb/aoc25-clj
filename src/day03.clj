@@ -41,52 +41,52 @@
    For each position i, the best joltage is digit[i]*10 + max(digits[i+1:]).
    Uses suffix-max for O(n) performance."
   [digits]
-  (let [n (count digits)
-        ;; suffix-max[i] = max of digits from index i to end
-        suffix-max (->> digits
-                        reverse
-                        (reductions max)
-                        reverse
-                        vec)]
-    (->> (range (dec n))
-         (map (fn [i]
-                (+ (* 10 (digits i))
-                   (suffix-max (inc i)))))
-         (apply max))))
+  (let [^ints arr (int-array digits)
+        n (alength arr)
+        ;; Build suffix-max array
+        ^ints smax (int-array n)]
+    (aset smax (dec n) (aget arr (dec n)))
+    (loop [i (- n 2)]
+      (when (>= i 0)
+        (aset smax i (max (aget arr i) (aget smax (inc i))))
+        (recur (dec i))))
+    ;; Find best joltage
+    (loop [i 0 best 0]
+      (if (>= i (dec n))
+        best
+        (recur (inc i)
+               (max best (+ (* 10 (aget arr i)) (aget smax (inc i)))))))))
 
 (defn part1
   "Sums max 2-digit joltages from all banks."
   [input]
-  (let [data (parse input)]
-    (->> data
-         (map max-joltage)
-         (reduce +))))
+  (transduce (map max-joltage) + (parse input)))
 
 (defn max-joltage-k
   "Find the maximum k-digit joltage from a bank of batteries.
    Greedy: for each step, pick the largest digit that leaves
-   enough remaining digits. Pure fold over (range k)."
+   enough remaining digits."
   [digits k]
-  (let [n (count digits)
-        find-best (fn [pos end]
-                    (reduce (fn [bi i] (if (> (digits i) (digits bi)) i bi))
-                            pos
-                            (range (inc pos) (inc end))))
-        [_ result] (reduce (fn [[pos result] step]
-                             (let [end (- n (- k step))
-                                   best-idx (find-best pos end)]
-                               [(inc best-idx) (conj result (digits best-idx))]))
-                           [0 []]
-                           (range k))]
-    (reduce (fn [acc d] (+ (* 10 acc) d)) 0 result)))
+  (let [^ints arr (int-array digits)
+        n (alength arr)]
+    (loop [pos 0 result 0 step 0]
+      (if (= step k)
+        result
+        (let [end (- n (- k step))
+              ;; Find best index in [pos, end]
+              best-idx (loop [bi pos i (inc pos)]
+                         (if (> i end)
+                           bi
+                           (recur (if (> (aget arr i) (aget arr bi)) i bi)
+                                  (inc i))))]
+          (recur (inc best-idx)
+                 (+ (* 10 result) (aget arr best-idx))
+                 (inc step)))))))
 
 (defn part2
   "Sums max 12-digit joltages from all banks."
   [input]
-  (let [data (parse input)]
-    (->> data
-         (map #(max-joltage-k % 12))
-         (reduce +))))
+  (transduce (map #(max-joltage-k % 12)) + (parse input)))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
