@@ -51,19 +51,28 @@
    Instead of iterating through all numbers, we generate candidate invalid numbers
    and check if they fall in the range."
   [start end]
-  (let [;; Maximum number of digits in half of the largest number
-        max-digits (count (str end))
-        max-half-len (quot (inc max-digits) 2)]
-    (for [half-len (range 1 (inc max-half-len))
-          :let [min-base (long (Math/pow 10 (dec half-len)))
-                ;; For half-len 1: min-base = 1 (gives 11, 22, ..., 99)
-                min-base (if (= half-len 1) 1 min-base)
-                max-base (dec (long (Math/pow 10 half-len)))]
-          base (range min-base (inc max-base))
-          :let [s (str base)
-                invalid-num (parse-long (str s s))]
-          :when (and (>= invalid-num start) (<= invalid-num end))]
-      invalid-num)))
+  (let [max-digits (count (str end))
+        max-half-len (quot (inc max-digits) 2)
+        pow10 (long-array (inc max-digits))]
+    (aset pow10 0 1)
+    (dotimes [i max-digits]
+      (aset pow10 (inc i) (* 10 (aget pow10 i))))
+    (persistent!
+     (reduce
+      (fn [acc half-len]
+        (let [min-base (if (= half-len 1) 1 (aget pow10 (dec half-len)))
+              max-base (dec (aget pow10 half-len))
+              factor (inc (aget pow10 half-len))]
+          (loop [b min-base acc acc]
+            (if (> b max-base)
+              acc
+              (let [invalid-num (* b factor)]
+                (recur (inc b)
+                       (if (and (>= invalid-num start) (<= invalid-num end))
+                         (conj! acc invalid-num)
+                         acc)))))))
+      (transient [])
+      (range 1 (inc max-half-len))))))
 
 (defn part1
   "Sums all invalid IDs (half=half pattern) across all ranges."
@@ -97,22 +106,52 @@
    Pattern can be repeated 2 or more times."
   [start end]
   (let [min-digits (count (str start))
-        max-digits (count (str end))]
-    (->> (for [num-digits (range min-digits (inc max-digits))
-               pattern-len (range 1 (inc (quot num-digits 2)))
-               :when (zero? (mod num-digits pattern-len))
-               :let [repeats (quot num-digits pattern-len)
-                     min-pattern (long (Math/pow 10 (dec pattern-len)))
-                     max-pattern (dec (long (Math/pow 10 pattern-len)))]
-               pattern-num (range min-pattern (inc max-pattern))
-               :let [pattern-str (str pattern-num)
-                     invalid-str (str/join (repeat repeats pattern-str))
-                     invalid-num (parse-long invalid-str)]
-               :when (and (>= invalid-num start)
-                          (<= invalid-num end))]
-           invalid-num)
-         (into #{})  ; Remove duplicates (e.g., 1111 = "11"x2 = "1"x4)
-         sort)))
+        max-digits (count (str end))
+        pow10 (long-array (inc max-digits))]
+    (aset pow10 0 1)
+    (dotimes [i max-digits]
+      (aset pow10 (inc i) (* 10 (aget pow10 i))))
+    (letfn [(minimal-period? [^String p]
+              (let [l (.length p)]
+                (loop [d 1]
+                  (cond
+                    (> d (quot l 2)) true
+                    (zero? (mod l d))
+                    (let [sub (.substring p 0 d)]
+                      (if (= p (apply str (repeat (quot l d) sub)))
+                        false
+                        (recur (inc d))))
+                    :else (recur (inc d))))))]
+      (sort
+       (persistent!
+        (reduce
+         (fn [acc num-digits]
+           (reduce
+            (fn [acc pattern-len]
+              (if (zero? (mod num-digits pattern-len))
+                (let [repeats (quot num-digits pattern-len)
+                      min-pattern (aget pow10 (dec pattern-len))
+                      max-pattern (dec (aget pow10 pattern-len))
+                      factor (loop [r 0 f 0]
+                               (if (= r repeats)
+                                 f
+                                 (recur (inc r) (+ f (aget pow10 (* r pattern-len))))))]
+                  (loop [p min-pattern acc acc]
+                    (if (> p max-pattern)
+                      acc
+                      (let [pstr (str p)]
+                        (recur (inc p)
+                               (if (minimal-period? pstr)
+                                 (let [invalid-num (* p factor)]
+                                   (if (and (>= invalid-num start) (<= invalid-num end))
+                                     (conj! acc invalid-num)
+                                     acc))
+                                 acc))))))
+                acc))
+            acc
+            (range 1 (inc (quot num-digits 2)))))
+         (transient [])
+         (range min-digits (inc max-digits))))))))
 
 (defn part2
   "Sums all invalid IDs (any repeated pattern) across all ranges."
