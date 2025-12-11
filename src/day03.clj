@@ -23,12 +23,16 @@
 818181911112111")
 
 (defn- parse-line
-  "Converts a string of digits into a vector of ints."
-  [line]
-  (mapv #(Character/digit % 10) line))
+  "Converts a string of digits into an int-array."
+  ^ints [^String line]
+  (let [n (.length line)
+        arr (int-array n)]
+    (dotimes [i n]
+      (aset arr i (- (int (.charAt line i)) 48)))
+    arr))
 
 (defn- parse
-  "Parses input into a vector of digit vectors (battery banks)."
+  "Parses input into a vector of int-arrays (battery banks)."
   [input]
   (->> input str/split-lines (mapv parse-line)))
 
@@ -36,12 +40,18 @@
 ;; Solution
 ;; ─────────────────────────────────────────────────────────────
 
+(defn- to-int-arr
+  ^ints [digits]
+  (if (instance? (Class/forName "[I") digits)
+    digits
+    (int-array digits)))
+
 (defn max-joltage
   "Find the maximum 2-digit joltage from a bank of batteries.
    For each position i, the best joltage is digit[i]*10 + max(digits[i+1:]).
    Uses suffix-max for O(n) performance."
   [digits]
-  (let [^ints arr (int-array digits)
+  (let [^ints arr (to-int-arr digits)
         n (alength arr)
         ;; Build suffix-max array
         ^ints smax (int-array n)]
@@ -67,7 +77,7 @@
    Greedy: for each step, pick the largest digit that leaves
    enough remaining digits."
   [digits k]
-  (let [^ints arr (int-array digits)
+  (let [^ints arr (to-int-arr digits)
         n (alength arr)]
     (loop [pos 0 result 0 step 0]
       (if (= step k)
@@ -93,8 +103,8 @@
 ;; ─────────────────────────────────────────────────────────────
 
 (deftest test-parse
-  (is (= [9 8 7 6 5 4 3 2 1 1 1 1 1 1 1] (parse-line "987654321111111")))
-  (is (= [[9 8 7] [1 2 3]] (parse "987\n123"))))
+  (is (= [9 8 7 6 5 4 3 2 1 1 1 1 1 1 1] (vec (parse-line "987654321111111"))))
+  (is (= [[9 8 7] [1 2 3]] (mapv vec (parse "987\n123")))))
 
 (deftest test-max-joltage
   ;; 987654321111111 -> 98 (first two are largest)
