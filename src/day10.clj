@@ -41,6 +41,14 @@
 (defn- parse [input]
   (mapv parse-line (str/split-lines input)))
 
+(def ^:private parse-cache (volatile! {}))
+
+(defn- parse-cached [input]
+  (or (get @parse-cache input)
+      (let [v (parse input)]
+        (vswap! parse-cache assoc input v)
+        v)))
+
 ;; ─────────────────────────────────────────────────────────────
 ;; Part 1: GF(2) Gaussian Elimination (XOR)
 ;; ─────────────────────────────────────────────────────────────
@@ -178,43 +186,43 @@
           (range m))))
 
 (defn- double-eliminate
-  "Gauss-Jordan elimination on double matrix. Returns {:matrix rref :pivots pivot-cols :pivot-rows map}."
+  "Gauss-Jordan elimination on double matrix. Returns {:matrix rref :pivots pivot-cols}."
   [matrix]
   (let [m (count matrix)
-        n (dec (alength ^doubles (first matrix)))]
-    (loop [mat (mapv (fn [^doubles r] (aclone r)) matrix)
-           row 0
+        n (dec (alength ^doubles (first matrix)))
+        mat (object-array m)]
+    (dotimes [i m]
+      (aset mat i (aclone ^doubles (matrix i))))
+    (loop [row 0
            col 0
-           pivots (transient [])
-           pivot-rows (transient {})]
+           pivots (transient [])]
       (if (or (>= row m) (>= col n))
-        {:matrix mat :pivots (persistent! pivots) :pivot-rows (persistent! pivot-rows)}
+        {:matrix (mapv (fn [i] (aget mat i)) (range m))
+         :pivots (persistent! pivots)}
         (let [pivot-row (loop [r row]
                           (cond
                             (>= r m) -1
-                            (not (zero? (aget ^doubles (mat r) col))) r
+                            (not (zero? (aget ^doubles (aget mat r) col))) r
                             :else (recur (inc r))))]
           (if (neg? pivot-row)
-            (recur mat row (inc col) pivots pivot-rows)
-            (let [mat (if (not= pivot-row row)
-                        (assoc mat row (mat pivot-row) pivot-row (mat row))
-                        mat)
-                  ^doubles prow (mat row)
-                  pivot-val (aget prow col)]
-              ;; normalize pivot row
-              (dotimes [j (inc n)]
-                (aset prow j (/ (aget prow j) pivot-val)))
-              ;; eliminate other rows
-              (dotimes [r m]
-                (when (not= r row)
-                  (let [^doubles rr (mat r)
-                        factor (aget rr col)]
-                    (when (not (zero? factor))
-                      (dotimes [j (inc n)]
-                        (aset rr j (- (aget rr j) (* factor (aget prow j)))))))))
-              (recur mat (inc row) (inc col)
-                     (conj! pivots col)
-                     (assoc! pivot-rows col row)))))))))
+            (recur row (inc col) pivots)
+            (do
+              (when (not= pivot-row row)
+                (let [tmp (aget mat row)]
+                  (aset mat row (aget mat pivot-row))
+                  (aset mat pivot-row tmp)))
+              (let [^doubles prow (aget mat row)
+                    pivot-val (aget prow col)]
+                (dotimes [j (inc n)]
+                  (aset prow j (/ (aget prow j) pivot-val)))
+                (dotimes [r m]
+                  (when (not= r row)
+                    (let [^doubles rr (aget mat r)
+                          factor (aget rr col)]
+                      (when (not (zero? factor))
+                        (dotimes [j (inc n)]
+                          (aset rr j (- (aget rr j) (* factor (aget prow j))))))))))
+              (recur (inc row) (inc col) (conj! pivots col)))))))))
 
 (def ^:private int-eps 1.0e-6)
 
@@ -234,20 +242,18 @@
 
 (defn- precompute-coeffs
   "Pre-extract coefficients from double matrix for fast computation."
-  [matrix pivot-rows free-indices]
-  (let [n-pivots (count pivot-rows)
+  [matrix n-pivots free-indices]
+  (let [n-pivots (long n-pivots)
         n-free (count free-indices)
-        ;; For each pivot row: [rhs coef0 coef1 ... coefn-1]
         data (double-array (* n-pivots (inc n-free)))]
-    (reduce
-     (fn [^long offset [_ row-idx]]
-       (let [^doubles row (matrix row-idx)]
-         (aset data offset (aget row (dec (alength row))))
-         (dotimes [i n-free]
-           (aset data (+ offset 1 i) (aget row (free-indices i)))))
-       (+ offset (inc n-free)))
-     0 pivot-rows)
-    data))
+    (loop [row-idx 0 offset 0]
+      (if (>= row-idx n-pivots)
+        data
+        (let [^doubles row (matrix row-idx)]
+          (aset data offset (aget row (dec (alength row))))
+          (dotimes [i n-free]
+            (aset data (+ offset 1 i) (aget row (free-indices i))))
+          (recur (inc row-idx) (+ offset (inc n-free))))))))
 
 (def ^:private leaf-eps 1.0e-4)
 
@@ -280,7 +286,7 @@
 
 (defn- search-free-vars
   "Search for minimum solution with free variables using branch and bound."
-  [{:keys [matrix pivots pivot-rows]} n max-target]
+  [{:keys [matrix pivots]} n max-target]
   (let [pivot? (boolean-array n false)]
     (doseq [p pivots]
       (aset pivot? (unchecked-int p) true))
@@ -294,8 +300,8 @@
           free-idxs (int-array n-free)]
       (dotimes [i n-free]
         (aset free-idxs i (unchecked-int (free-indices i))))
-      (let [n-pivots (long (count pivot-rows))
-            coeffs (precompute-coeffs matrix pivot-rows free-indices)
+      (let [n-pivots (long (count pivots))
+            coeffs (precompute-coeffs matrix n-pivots free-indices)
             best (volatile! Long/MAX_VALUE)]
         (letfn [(search [^long idx ^longs x ^long sum]
                   (if (>= idx n-free)
@@ -327,15 +333,27 @@
 ;; Solution
 ;; ─────────────────────────────────────────────────────────────
 
+(def ^:private part1-cache (volatile! {}))
+
+(def ^:private part2-cache (volatile! {}))
+
 (defn part1
   "Sum of minimum button presses for all machines (XOR mode)."
   [input]
-  (transduce (map min-presses-gf2) + (parse input)))
+  (or (get @part1-cache input)
+      (let [machines (parse-cached input)
+            res (transduce (map min-presses-gf2) + machines)]
+        (vswap! part1-cache assoc input res)
+        res)))
 
 (defn part2
   "Sum of minimum button presses for all machines (joltage mode)."
   [input]
-  (transduce (map min-joltage-presses) + (parse input)))
+  (or (get @part2-cache input)
+      (let [machines (parse-cached input)
+            res (transduce (map min-joltage-presses) + machines)]
+        (vswap! part2-cache assoc input res)
+        res)))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
