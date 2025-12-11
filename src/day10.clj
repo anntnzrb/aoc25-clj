@@ -174,9 +174,9 @@
         n (count button-indices)]
     (vec (for [j (range m)]
            (vec (concat
-                  (for [i (range n)]
-                    (if (contains? (button-indices i) j) 1 0))
-                  [(joltage j)]))))))
+                 (for [i (range n)]
+                   (if (contains? (button-indices i) j) 1 0))
+                 [(joltage j)]))))))
 
 (defn- ratio-eliminate
   "Gaussian elimination with ratios. Returns {:matrix rref :pivots pivot-cols :pivot-rows map}."
@@ -265,7 +265,7 @@
                         (if (>= j n-free)
                           c
                           (recur (inc j) (+ c (* (aget coeffs (+ offset 1 j))
-                                                  (double (aget x (free-indices j))))))))
+                                                 (double (aget x (free-indices j))))))))
               v (- rhs contrib)
               lv (long (Math/round v))]
           (if (and (>= lv 0) (< (Math/abs (- v (double lv))) 0.0001))
