@@ -12,7 +12,11 @@
 ;; Green tiles: edges connecting consecutive red tiles + polygon interior
 ;; Part 1: Find largest rectangle with any two red tiles as opposite corners
 ;; Part 2: Rectangle must fit entirely inside polygon (only red/green tiles)
-;; Uses ray casting for point-in-polygon, segment crossing for validation
+;;
+;; Optimizations:
+;; - Primitive long arrays for edges (stride 3: key, min, max)
+;; - Binary search with unchecked math
+;; - Early termination on sorted pairs by area
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Parsing
@@ -30,213 +34,269 @@
 7,3")
 
 (defn- parse
-  "Parse input into vector of [x y] coordinates."
-  [input]
-  (mapv #(mapv parse-long (str/split % #",")) (str/split-lines input)))
+  "Parse input into flat long array [x0 y0 x1 y1 ...]."
+  ^longs [input]
+  (let [lines (str/split-lines input)
+        n (count lines)
+        arr (long-array (* 2 n))]
+    (dotimes [i n]
+      (let [[x y] (str/split (lines i) #",")
+            base (unchecked-multiply-int 2 i)]
+        (aset arr base (parse-long x))
+        (aset arr (unchecked-inc base) (parse-long y))))
+    arr))
+
+(defn- point-count ^long [^longs arr] (quot (alength arr) 2))
 
 ;; ─────────────────────────────────────────────────────────────
-;; Polygon
+;; Polygon Edges (primitive arrays)
 ;; ─────────────────────────────────────────────────────────────
 
-(defn- polygon-edges
-  "Build polygon edges connecting consecutive red tiles (wrapping)."
-  [points]
-  (map vector points (concat (rest points) [(first points)])))
-
-(defn- normalize-h-edge
-  "Normalize horizontal edge to [y x1 x2] with x1 <= x2."
-  [[[x1 y] [x2 _]]]
-  [y (min x1 x2) (max x1 x2)])
-
-(defn- normalize-v-edge
-  "Normalize vertical edge to [x y1 y2] with y1 <= y2."
-  [[[x y1] [_ y2]]]
-  [x (min y1 y2) (max y1 y2)])
-
-(defn- partition-edges
-  "Separate edges into horizontal [y x1 x2] and vertical [x y1 y2].
-   H-edges sorted by y, V-edges sorted by x for binary search."
-  [edges]
-  (let [h-edge? (fn [[[_ y1] [_ y2]]] (= y1 y2))
-        v-edge? (fn [[[x1 _] [x2 _]]] (= x1 x2))]
-    [(vec (sort-by first (map normalize-h-edge (filter h-edge? edges))))
-     (vec (sort-by first (map normalize-v-edge (filter v-edge? edges))))]))
+(defn- build-edges
+  "Build sorted edge arrays. Returns [h-arr h-cnt v-arr v-cnt] where
+   each array stores [key min max] triples sorted by key."
+  [^longs points]
+  (let [n (point-count points)
+        h-list (java.util.ArrayList.)
+        v-list (java.util.ArrayList.)]
+    (dotimes [i n]
+      (let [base1 (unchecked-multiply-int 2 i)
+            j (mod (unchecked-inc i) n)
+            base2 (unchecked-multiply-int 2 j)
+            x1 (aget points base1)
+            y1 (aget points (unchecked-inc base1))
+            x2 (aget points base2)
+            y2 (aget points (unchecked-inc base2))]
+        (if (== y1 y2)
+          (.add h-list (long-array [(long y1) (min x1 x2) (max x1 x2)]))
+          (.add v-list (long-array [(long x1) (min y1 y2) (max y1 y2)])))))
+    (let [h-sorted (sort-by #(aget ^longs % 0) h-list)
+          v-sorted (sort-by #(aget ^longs % 0) v-list)
+          h-cnt (count h-sorted)
+          v-cnt (count v-sorted)
+          h-arr (long-array (* 3 h-cnt))
+          v-arr (long-array (* 3 v-cnt))]
+      (dotimes [i h-cnt]
+        (let [^longs e (nth h-sorted i)
+              base (* 3 i)]
+          (aset h-arr base (aget e 0))
+          (aset h-arr (inc base) (aget e 1))
+          (aset h-arr (+ base 2) (aget e 2))))
+      (dotimes [i v-cnt]
+        (let [^longs e (nth v-sorted i)
+              base (* 3 i)]
+          (aset v-arr base (aget e 0))
+          (aset v-arr (inc base) (aget e 1))
+          (aset v-arr (+ base 2) (aget e 2))))
+      [h-arr (long h-cnt) v-arr (long v-cnt)])))
 
 ;; ─────────────────────────────────────────────────────────────
-;; Ray Casting
+;; Binary Search
 ;; ─────────────────────────────────────────────────────────────
 
-(defn- binary-search-gt
-  "Find index of first element in sorted vec where (first elem) > target."
-  [v target]
-  (let [n (count v)]
-    (loop [lo 0 hi n]
-      (if (>= lo hi)
-        lo
-        (let [mid (quot (+ lo hi) 2)]
-          (if (> (first (v mid)) target)
-            (recur lo mid)
-            (recur (inc mid) hi)))))))
+(defn- bsearch-gt
+  "Find index of first element where key > target in stride-3 array."
+  ^long [^longs arr ^long cnt ^long target]
+  (loop [lo (long 0) hi cnt]
+    (if (>= lo hi)
+      lo
+      (let [mid (+ lo (bit-shift-right (- hi lo) 1))]
+        (if (> (aget arr (* 3 mid)) target)
+          (recur lo mid)
+          (recur (inc mid) hi))))))
+
+;; ─────────────────────────────────────────────────────────────
+;; Point Containment (primitive)
+;; ─────────────────────────────────────────────────────────────
 
 (defn- on-h-boundary?
-  "Check if point lies on any horizontal boundary edge.
-   Uses binary search since h-edges are sorted by y."
-  [h-edges px py]
-  (let [n (count h-edges)
-        ;; Find edges where y = py
-        idx (binary-search-gt h-edges (dec py))]
-    (loop [i idx]
-      (when (< i n)
-        (let [[y x1 x2] (h-edges i)]
+  ^long [^longs h-arr ^long h-cnt ^long px ^long py]
+  (let [start (bsearch-gt h-arr h-cnt (dec py))]
+    (loop [i start]
+      (if (>= i h-cnt)
+        0
+        (let [base (* 3 i)
+              y (aget h-arr base)]
           (cond
-            (> y py) false
-            (and (= y py) (<= x1 px x2)) true
+            (> y py) 0
+            (and (== y py)
+                 (<= (aget h-arr (inc base)) px)
+                 (<= px (aget h-arr (+ base 2)))) 1
             :else (recur (inc i))))))))
 
 (defn- on-v-boundary?
-  "Check if point lies on any vertical boundary edge.
-   Uses binary search since v-edges are sorted by x."
-  [v-edges px py]
-  (let [n (count v-edges)
-        idx (binary-search-gt v-edges (dec px))]
-    (loop [i idx]
-      (when (< i n)
-        (let [[x y1 y2] (v-edges i)]
+  ^long [^longs v-arr ^long v-cnt ^long px ^long py]
+  (let [start (bsearch-gt v-arr v-cnt (dec px))]
+    (loop [i start]
+      (if (>= i v-cnt)
+        0
+        (let [base (* 3 i)
+              x (aget v-arr base)]
           (cond
-            (> x px) false
-            (and (= x px) (<= y1 py y2)) true
+            (> x px) 0
+            (and (== x px)
+                 (<= (aget v-arr (inc base)) py)
+                 (<= py (aget v-arr (+ base 2)))) 1
             :else (recur (inc i))))))))
 
-(defn- ray-crossing-count
-  "Count vertical edges crossed by rightward ray from point.
-   Uses binary search since v-edges are sorted by x."
-  [v-edges px py]
-  (let [start-idx (binary-search-gt v-edges px)]
-    (loop [i start-idx cnt 0]
-      (if (>= i (count v-edges))
+(defn- ray-crossings
+  ^long [^longs v-arr ^long v-cnt ^long px ^long py]
+  (let [start (bsearch-gt v-arr v-cnt px)]
+    (loop [i start cnt (long 0)]
+      (if (>= i v-cnt)
         cnt
-        (let [[_ y1 y2] (v-edges i)]
-          (recur (inc i) (if (< y1 py y2) (inc cnt) cnt)))))))
+        (let [base (* 3 i)
+              y1 (aget v-arr (inc base))
+              y2 (aget v-arr (+ base 2))]
+          (recur (inc i)
+                 (if (and (< y1 py) (< py y2)) (inc cnt) cnt)))))))
 
 (defn- point-inside?
-  "Check if point is inside polygon using ray casting."
-  [h-edges v-edges px py]
-  (or (on-h-boundary? h-edges px py)
-      (on-v-boundary? v-edges px py)
-      (odd? (ray-crossing-count v-edges px py))))
+  [^longs h-arr h-cnt ^longs v-arr v-cnt px py]
+  (let [h-cnt (long h-cnt) v-cnt (long v-cnt) px (long px) py (long py)]
+    (if (pos? (on-h-boundary? h-arr h-cnt px py))
+      1
+      (if (pos? (on-v-boundary? v-arr v-cnt px py))
+        1
+        (bit-and (ray-crossings v-arr v-cnt px py) 1)))))
 
 ;; ─────────────────────────────────────────────────────────────
-;; Rectangle Validation
+;; Rectangle Validation (primitive)
 ;; ─────────────────────────────────────────────────────────────
 
-(defn- v-edge-crosses-h-segment?
-  "Check if any vertical edge crosses through horizontal segment.
-   Uses binary search since v-edges are sorted by x."
-  [v-edges lx hx y]
-  (let [start-idx (binary-search-gt v-edges lx)
-        n (count v-edges)]
-    (loop [i start-idx]
-      (when (< i n)
-        (let [[x y1 y2] (v-edges i)]
+(defn- v-crosses-h?
+  [^longs v-arr v-cnt lx hx y]
+  (let [v-cnt (long v-cnt) lx (long lx) hx (long hx) y (long y)
+        start (bsearch-gt v-arr v-cnt lx)]
+    (loop [i start]
+      (if (>= i v-cnt)
+        0
+        (let [base (* 3 i)
+              x (aget v-arr base)]
           (cond
-            (>= x hx) false
-            (< y1 y y2) true
+            (>= x hx) 0
+            (and (< (aget v-arr (inc base)) y)
+                 (< y (aget v-arr (+ base 2)))) 1
             :else (recur (inc i))))))))
 
-(defn- h-edge-crosses-v-segment?
-  "Check if any horizontal edge crosses through vertical segment.
-   Uses binary search since h-edges are sorted by y."
-  [h-edges ly hy x]
-  (let [start-idx (binary-search-gt h-edges ly)
-        n (count h-edges)]
-    (loop [i start-idx]
-      (when (< i n)
-        (let [[y x1 x2] (h-edges i)]
+(defn- h-crosses-v?
+  [^longs h-arr h-cnt ly hy x]
+  (let [h-cnt (long h-cnt) ly (long ly) hy (long hy) x (long x)
+        start (bsearch-gt h-arr h-cnt ly)]
+    (loop [i start]
+      (if (>= i h-cnt)
+        0
+        (let [base (* 3 i)
+              y (aget h-arr base)]
           (cond
-            (>= y hy) false
-            (< x1 x x2) true
+            (>= y hy) 0
+            (and (< (aget h-arr (inc base)) x)
+                 (< x (aget h-arr (+ base 2)))) 1
             :else (recur (inc i))))))))
 
-(defn- rectangle-inside?
-  "Check if rectangle is fully inside polygon."
-  [h-edges v-edges lx hx ly hy]
-  (let [mid-x (quot (+ lx hx) 2)
-        mid-y (quot (+ ly hy) 2)
-        inside? (partial point-inside? h-edges v-edges)]
-    (and (inside? lx ly) (inside? hx ly) (inside? lx hy) (inside? hx hy)
-         (inside? mid-x ly) (not (v-edge-crosses-h-segment? v-edges lx hx ly))
-         (inside? mid-x hy) (not (v-edge-crosses-h-segment? v-edges lx hx hy))
-         (inside? lx mid-y) (not (h-edge-crosses-v-segment? h-edges ly hy lx))
-         (inside? hx mid-y) (not (h-edge-crosses-v-segment? h-edges ly hy hx)))))
+(defn- rect-inside?
+  [^longs h-arr h-cnt ^longs v-arr v-cnt lx hx ly hy]
+  (let [h-cnt (long h-cnt) v-cnt (long v-cnt)
+        lx (long lx) hx (long hx) ly (long ly) hy (long hy)
+        mid-x (bit-shift-right (+ lx hx) 1)
+        mid-y (bit-shift-right (+ ly hy) 1)
+        in? (fn [x y] (point-inside? h-arr h-cnt v-arr v-cnt x y))]
+    (and (pos? (in? lx ly)) (pos? (in? hx ly))
+         (pos? (in? lx hy)) (pos? (in? hx hy))
+         (pos? (in? mid-x ly)) (zero? (v-crosses-h? v-arr v-cnt lx hx ly))
+         (pos? (in? mid-x hy)) (zero? (v-crosses-h? v-arr v-cnt lx hx hy))
+         (pos? (in? lx mid-y)) (zero? (h-crosses-v? h-arr h-cnt ly hy lx))
+         (pos? (in? hx mid-y)) (zero? (h-crosses-v? h-arr h-cnt ly hy hx)))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Solution
 ;; ─────────────────────────────────────────────────────────────
 
-(defn- rectangle-area
-  "Calculate rectangle area: (|dx|+1) * (|dy|+1)."
-  [[x1 y1] [x2 y2]]
+(defn- rect-area
+  ^long [^long x1 ^long y1 ^long x2 ^long y2]
   (* (inc (abs (- x2 x1))) (inc (abs (- y2 y1)))))
-
-(defn- point-pairs
-  "Generate all unique pairs of indices [i j] where i < j."
-  [n]
-  (for [i (range n), j (range (inc i) n)] [i j]))
 
 (defn part1
   "Find largest rectangle area with two red tiles as opposite corners."
   [input]
-  (let [points (parse input)]
-    (->> (point-pairs (count points))
-         (map (fn [[i j]] (rectangle-area (points i) (points j))))
-         (reduce max 0))))
-
-(defn- valid-rectangle-area
-  "Return rectangle area if fully inside polygon, else 0."
-  [h-edges v-edges [p1 p2]]
-  (let [[x1 y1] p1
-        [x2 y2] p2
-        lx (min x1 x2) hx (max x1 x2)
-        ly (min y1 y2) hy (max y1 y2)]
-    (if (rectangle-inside? h-edges v-edges lx hx ly hy)
-      (* (inc (- hx lx)) (inc (- hy ly)))
-      0)))
-
-(defn- max-valid-rectangle
-  "Find max rectangle area with red corners fully inside polygon.
-   Sorts pairs by area descending for early termination."
-  [red-tiles]
-  (let [[h-edges v-edges] (partition-edges (polygon-edges red-tiles))
-        pairs (sort-by (fn [[p1 p2]] (- (rectangle-area p1 p2)))
-                       (for [i (range (count red-tiles))
-                             j (range (inc i) (count red-tiles))]
-                         [(red-tiles i) (red-tiles j)]))]
-    (reduce (fn [best pair]
-              (let [area (valid-rectangle-area h-edges v-edges pair)]
-                (if (pos? area)
-                  (reduced area)  ; First valid = largest (sorted desc)
-                  best)))
-            0 pairs)))
+  (let [pts (parse input)
+        n (point-count pts)]
+    (loop [i (long 0) best (long 0)]
+      (if (>= i n)
+        best
+        (let [base-i (* 2 i)
+              x1 (aget pts base-i)
+              y1 (aget pts (inc base-i))]
+          (recur (inc i)
+                 (loop [j (inc i) best best]
+                   (if (>= j n)
+                     best
+                     (let [base-j (* 2 j)
+                           x2 (aget pts base-j)
+                           y2 (aget pts (inc base-j))
+                           area (rect-area x1 y1 x2 y2)]
+                       (recur (inc j) (max best area)))))))))))
 
 (defn part2
   "Find largest rectangle using only red/green tiles with red corners."
   [input]
-  (max-valid-rectangle (parse input)))
+  (let [pts (parse input)
+        n (point-count pts)
+        [^longs h-arr h-cnt ^longs v-arr v-cnt] (build-edges pts)
+        ;; Build pairs array: [lx hx ly hy area] sorted by -area
+        pairs (long-array (* 5 (quot (* n (dec n)) 2)))
+        pair-cnt (loop [i (long 0) idx (long 0)]
+                   (if (>= i n)
+                     (quot idx 5)
+                     (recur (inc i)
+                            (loop [j (inc i) idx idx]
+                              (if (>= j n)
+                                idx
+                                (let [bi (* 2 i) bj (* 2 j)
+                                      x1 (aget pts bi) y1 (aget pts (inc bi))
+                                      x2 (aget pts bj) y2 (aget pts (inc bj))
+                                      lx (min x1 x2) hx (max x1 x2)
+                                      ly (min y1 y2) hy (max y1 y2)
+                                      area (rect-area x1 y1 x2 y2)]
+                                  (aset pairs idx lx)
+                                  (aset pairs (inc idx) hx)
+                                  (aset pairs (+ idx 2) ly)
+                                  (aset pairs (+ idx 3) hy)
+                                  (aset pairs (+ idx 4) area)
+                                  (recur (inc j) (+ idx 5))))))))]
+    ;; Sort by area descending (simple selection for top few)
+    (let [sorted-idx (long-array pair-cnt)]
+      (dotimes [i pair-cnt] (aset sorted-idx i i))
+      ;; Sort indices by area descending
+      (let [idx-list (sort-by #(- (aget pairs (+ (* 5 %) 4))) (range pair-cnt))]
+        (loop [remaining idx-list]
+          (if (empty? remaining)
+            0
+            (let [pi (first remaining)
+                  base (* 5 pi)
+                  lx (aget pairs base)
+                  hx (aget pairs (inc base))
+                  ly (aget pairs (+ base 2))
+                  hy (aget pairs (+ base 3))
+                  area (aget pairs (+ base 4))]
+              (if (rect-inside? h-arr h-cnt v-arr v-cnt lx hx ly hy)
+                area
+                (recur (rest remaining))))))))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
 ;; ─────────────────────────────────────────────────────────────
 
 (deftest test-parse
-  (let [points (parse example)]
-    (is (= 8 (count points)))
-    (is (= [7 1] (first points)))
-    (is (= [7 3] (last points)))))
+  (let [pts (parse example)]
+    (is (= 8 (point-count pts)))
+    (is (= 7 (aget pts 0)))
+    (is (= 1 (aget pts 1)))))
 
 (deftest test-rectangle-area
-  (is (= 24 (rectangle-area [2 5] [9 7])))
-  (is (= 35 (rectangle-area [7 1] [11 7])))
-  (is (= 6 (rectangle-area [7 3] [2 3]))))
+  (is (= 24 (rect-area 2 5 9 7)))
+  (is (= 35 (rect-area 7 1 11 7)))
+  (is (= 6 (rect-area 7 3 2 3))))
 
 (deftest test-part1-example
   (is (= 50 (part1 example))))
