@@ -70,12 +70,13 @@
 
 (def cli-spec
   "CLI options specification for babashka/cli."
-  {:help       {:alias :h :desc "Show this help"}
-   :list       {:alias :l :desc "List available days"}
-   :all        {:alias :a :desc "Run all available days"}
-   :fetch      {:alias :f :desc "Fetch input before running"}
-   :fetch-only {:desc "Only fetch inputs, don't run solutions"}
-   :force      {:desc "Force re-fetch even if cached"}})
+  {:help       {:alias :h :coerce :boolean :desc "Show this help"}
+   :list       {:alias :l :coerce :boolean :desc "List available days"}
+   :all        {:alias :a :coerce :boolean :desc "Run all available days"}
+   :bench      {:alias :b :coerce :boolean :desc "Benchmark instead of run"}
+   :fetch      {:alias :f :coerce :boolean :desc "Fetch input before running"}
+   :fetch-only {:coerce :boolean :desc "Only fetch inputs, don't run solutions"}
+   :force      {:coerce :boolean :desc "Force re-fetch even if cached"}})
 
 (defn day-path
   "Returns the path to a day's solution file."
@@ -214,11 +215,92 @@ Setup: Add AOC_SESSION=<cookie> to .env")))
           (println (str "  Day " day))))
       (println "No days available yet."))))
 
+;; ─────────────────────────────────────────────────────────────
+;; Benchmarking
+;; ─────────────────────────────────────────────────────────────
+
+(def ^:private bench-warmup 3)
+(def ^:private bench-runs 10)
+
+(defn- format-time
+  "Format nanoseconds as human-readable string."
+  [nanos]
+  (let [ms (/ nanos 1e6)]
+    (cond
+      (< ms 1) (format "%.2f µs" (* ms 1000))
+      (< ms 1000) (format "%.2f ms" ms)
+      :else (format "%.2f s" (/ ms 1000)))))
+
+(defn- bench-fn
+  "Benchmark a function, returning average time in nanoseconds."
+  [f]
+  ;; Warmup
+  (dotimes [_ bench-warmup] (f))
+  ;; Timed runs
+  (let [start (System/nanoTime)
+        _ (dotimes [_ bench-runs] (f))
+        end (System/nanoTime)]
+    (/ (- end start) bench-runs)))
+
+(defn- bench-day
+  "Benchmark a single day's solutions. Returns {:day :part1 :part2 :total} times in ns."
+  [day]
+  (when (and (day-exists? day) (input-exists? day))
+    (let [{:keys [part1 part2]} (load-day-ns day)
+          input (slurp (input-path day))
+          t1 (bench-fn #(part1 input))
+          t2 (bench-fn #(part2 input))]
+      {:day day :part1 t1 :part2 t2 :total (+ t1 t2)})))
+
+(defn- print-bench-header
+  "Print benchmark table header."
+  []
+  (println)
+  (println "╔═════╤══════════════╤══════════════╤══════════════╗")
+  (println "║ Day │    Part 1    │    Part 2    │    Total     ║")
+  (println "╠═════╪══════════════╪══════════════╪══════════════╣"))
+
+(defn- print-bench-row
+  "Print a single benchmark result row."
+  [{:keys [day part1 part2 total]}]
+  (println (format "║ %3d │ %12s │ %12s │ %12s ║"
+                   day
+                   (format-time part1)
+                   (format-time part2)
+                   (format-time total))))
+
+(defn- print-bench-footer
+  "Print benchmark table footer with totals."
+  [results]
+  (let [total-p1 (reduce + (map :part1 results))
+        total-p2 (reduce + (map :part2 results))
+        total-all (reduce + (map :total results))]
+    (println "╠═════╪══════════════╪══════════════╪══════════════╣")
+    (println (format "║ All │ %12s │ %12s │ %12s ║"
+                     (format-time total-p1)
+                     (format-time total-p2)
+                     (format-time total-all)))
+    (println "╚═════╧══════════════╧══════════════╧══════════════╝")
+    (println (format "\n(%d warmup + %d timed runs per part)" bench-warmup bench-runs))))
+
+(defn bench-days
+  "Benchmark multiple days and print results table."
+  [days]
+  (println "Benchmarking...")
+  (let [results (keep bench-day days)]
+    (if (seq results)
+      (do
+        (print-bench-header)
+        (doseq [r results]
+          (print-bench-row r))
+        (print-bench-footer results))
+      (println "No days with inputs available to benchmark."))))
+
 (defn -main
   "CLI entry point."
   [& args]
   (let [{:keys [opts args]} (cli/parse-args args {:spec cli-spec})
-        {:keys [help list all fetch fetch-only force]} opts
+        {:keys [help list all bench fetch fetch-only force]} opts
         days (parse-days args)]
     (cond
       help
@@ -233,6 +315,12 @@ Setup: Add AOC_SESSION=<cookie> to .env")))
           (get-input day :force force)
           (catch Exception e
             (println (str "Failed to fetch day " day ": " (.getMessage e))))))
+
+      bench
+      (let [days-to-bench (if (or all (empty? days)) (available-days) days)]
+        (if (seq days-to-bench)
+          (bench-days days-to-bench)
+          (println "No days available yet.")))
 
       :else
       (let [days-to-run (if (or all (empty? days)) (available-days) days)]
