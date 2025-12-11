@@ -20,7 +20,7 @@
 [.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}")
 
 (defn- parse-line
-  "Parse a machine line into {:target :buttons :button-indices :joltage}."
+  "Parse a machine line into {:target :buttons :joltage}."
   [^String line]
   (let [parts (str/split line #"\s+")
         target-str ^String (first parts)
@@ -32,14 +32,10 @@
                         (reduce (fn [m n] (bit-set m (parse-long n)))
                                 0 (re-seq #"\d+" s)))
                       button-strs)
-        button-indices (mapv (fn [^String s]
-                               (into #{} (map parse-long) (re-seq #"\d+" s)))
-                             button-strs)
         joltage-str ^String (last parts)
         joltage (mapv parse-long (re-seq #"\d+" joltage-str))]
     {:target target
      :buttons buttons
-     :button-indices button-indices
      :joltage joltage}))
 
 (defn- parse [input]
@@ -165,75 +161,79 @@
 ;;
 ;; Solve Ax = b where A[j][i] = 1 if button i affects counter j
 ;; Find x >= 0 minimizing sum(x)
-;; Uses ratio Gaussian elimination with tight bounds and gradient-based search
+;; Uses double Gaussian elimination with tight bounds and integer validation
 
-(defn- build-ratio-matrix
-  "Build augmented matrix [A|b] using ratios for numerical stability."
-  [button-indices joltage]
+(defn- build-double-matrix
+  "Build augmented matrix [A|b] as doubles."
+  [buttons joltage]
   (let [m (count joltage)
-        n (count button-indices)]
-    (vec (for [j (range m)]
-           (vec (concat
-                 (for [i (range n)]
-                   (if (contains? (button-indices i) j) 1 0))
-                 [(joltage j)]))))))
+        n (count buttons)]
+    (mapv (fn [j]
+            (let [row (double-array (inc n) 0.0)]
+              (dotimes [i n]
+                (when (bit-test (buttons i) j)
+                  (aset row i 1.0)))
+              (aset row n (double (joltage j)))
+              row))
+          (range m))))
 
-(defn- ratio-eliminate
-  "Gaussian elimination with ratios. Returns {:matrix rref :pivots pivot-cols :pivot-rows map}."
+(defn- double-eliminate
+  "Gauss-Jordan elimination on double matrix. Returns {:matrix rref :pivots pivot-cols :pivot-rows map}."
   [matrix]
   (let [m (count matrix)
-        n (dec (count (first matrix)))]
-    (loop [mat (mapv #(mapv identity %) matrix)
+        n (dec (alength ^doubles (first matrix)))]
+    (loop [mat (mapv (fn [^doubles r] (aclone r)) matrix)
            row 0
            col 0
-           pivots []
-           pivot-rows {}]
+           pivots (transient [])
+           pivot-rows (transient {})]
       (if (or (>= row m) (>= col n))
-        {:matrix mat :pivots pivots :pivot-rows pivot-rows}
-        (let [pivot-row (first (filter #(not (zero? (get-in mat [% col]))) (range row m)))]
-          (if (nil? pivot-row)
+        {:matrix mat :pivots (persistent! pivots) :pivot-rows (persistent! pivot-rows)}
+        (let [pivot-row (loop [r row]
+                          (cond
+                            (>= r m) -1
+                            (not (zero? (aget ^doubles (mat r) col))) r
+                            :else (recur (inc r))))]
+          (if (neg? pivot-row)
             (recur mat row (inc col) pivots pivot-rows)
             (let [mat (if (not= pivot-row row)
                         (assoc mat row (mat pivot-row) pivot-row (mat row))
                         mat)
-                  pivot-val (get-in mat [row col])
-                  mat (update mat row (fn [r] (mapv #(/ % pivot-val) r)))
-                  mat (reduce (fn [m r]
-                                (if (= r row)
-                                  m
-                                  (let [factor (get-in m [r col])]
-                                    (update m r (fn [rv] (mapv #(- %1 (* factor %2)) rv (m row)))))))
-                              mat (range m))]
-              (recur mat (inc row) (inc col) (conj pivots col) (assoc pivot-rows col row)))))))))
+                  ^doubles prow (mat row)
+                  pivot-val (aget prow col)]
+              ;; normalize pivot row
+              (dotimes [j (inc n)]
+                (aset prow j (/ (aget prow j) pivot-val)))
+              ;; eliminate other rows
+              (dotimes [r m]
+                (when (not= r row)
+                  (let [^doubles rr (mat r)
+                        factor (aget rr col)]
+                    (when (not (zero? factor))
+                      (dotimes [j (inc n)]
+                        (aset rr j (- (aget rr j) (* factor (aget prow j)))))))))
+              (recur mat (inc row) (inc col)
+                     (conj! pivots col)
+                     (assoc! pivot-rows col row)))))))))
 
-(defn- int-val
-  "If x is an integer or integer-valued ratio that fits in a long, return it. Otherwise nil."
-  [x]
-  (try
-    (cond
-      (integer? x) (long x)
-      (and (ratio? x) (= 1 (denominator x)))
-      (let [n (numerator x)]
-        (if (instance? clojure.lang.BigInt n)
-          (when (<= Long/MIN_VALUE n Long/MAX_VALUE) (long n))
-          (long n)))
-      :else nil)
-    (catch Exception _ nil)))
+(def ^:private int-eps 1.0e-6)
 
-(defn- solve-unique
-  "Extract unique solution if no free vars. Returns sum or nil."
+(defn- solve-unique-double
+  "Extract unique integer solution if no free vars. Returns sum or nil."
   [{:keys [matrix pivots]} n]
   (when (= (count pivots) n)
     (reduce (fn [sum [row-idx pivot-col]]
-              (let [v (last (matrix row-idx))
-                    lv (int-val v)]
-                (if (and lv (>= lv 0))
+              (let [^doubles row (matrix row-idx)
+                    v (aget row n)
+                    lv (long (Math/round v))]
+                (if (and (>= lv 0)
+                         (< (Math/abs (- v (double lv))) int-eps))
                   (+ sum lv)
                   (reduced nil))))
             0 (map-indexed vector pivots))))
 
 (defn- precompute-coeffs
-  "Pre-extract coefficients from ratio matrix as doubles for fast computation."
+  "Pre-extract coefficients from double matrix for fast computation."
   [matrix pivot-rows free-indices]
   (let [n-pivots (count pivot-rows)
         n-free (count free-indices)
@@ -241,70 +241,87 @@
         data (double-array (* n-pivots (inc n-free)))]
     (reduce
      (fn [^long offset [_ row-idx]]
-       (let [row (matrix row-idx)]
-         (aset data offset (double (last row)))
+       (let [^doubles row (matrix row-idx)]
+         (aset data offset (aget row (dec (alength row))))
          (dotimes [i n-free]
-           (aset data (+ offset 1 i) (double (row (free-indices i))))))
+           (aset data (+ offset 1 i) (aget row (free-indices i)))))
        (+ offset (inc n-free)))
      0 pivot-rows)
     data))
 
+(def ^:private leaf-eps 1.0e-4)
+
 (defn- compute-total-fast
   "Fast computation using precomputed double coefficients."
-  [^doubles coeffs n-pivots n-free ^longs x free-indices]
-  (let [n-pivots (long n-pivots)
+  [coeffs n-pivots n-free x free-idxs sum-free]
+  (let [^doubles coeffs coeffs
+        ^longs x x
+        ^ints free-idxs free-idxs
+        ^long sum-free sum-free
+        n-pivots (long n-pivots)
         n-free (long n-free)
         row-size (inc n-free)]
     (loop [i 0
            offset 0
            total 0]
       (if (>= i n-pivots)
-        (+ total (areduce x j acc 0 (+ acc (aget x j))))
+        (+ total sum-free)
         (let [rhs (aget coeffs offset)
               contrib (loop [j 0 c 0.0]
                         (if (>= j n-free)
                           c
                           (recur (inc j) (+ c (* (aget coeffs (+ offset 1 j))
-                                                 (double (aget x (free-indices j))))))))
+                                                 (double (aget x (aget free-idxs j))))))))
               v (- rhs contrib)
               lv (long (Math/round v))]
-          (if (and (>= lv 0) (< (Math/abs (- v (double lv))) 0.0001))
+          (if (and (>= lv 0) (< (Math/abs (- v (double lv))) leaf-eps))
             (recur (inc i) (+ offset row-size) (+ total lv))
             -1))))))
 
 (defn- search-free-vars
   "Search for minimum solution with free variables using branch and bound."
   [{:keys [matrix pivots pivot-rows]} n max-target]
-  (let [pivot-set (set pivots)
-        free-indices (vec (remove pivot-set (range n)))
-        n-free (long (count free-indices))
-        n-pivots (long (count pivot-rows))
-        coeffs (precompute-coeffs matrix pivot-rows free-indices)
-        best (volatile! Long/MAX_VALUE)]
-    (letfn [(search [^long idx ^longs x ^long sum]
-              (if (>= idx n-free)
-                (let [total (compute-total-fast coeffs n-pivots n-free x free-indices)]
-                  (when (and (>= total 0) (< total @best))
-                    (vreset! best total)))
-                (let [fi (free-indices idx)
-                      max-v (min max-target (max 0 (- @best sum 1)))]
-                  (loop [v 0]
-                    (when (<= v max-v)
-                      (aset x fi v)
-                      (search (inc idx) x (+ sum v))
-                      (recur (inc v)))))))]
-      (let [x (long-array n 0)]
-        (search 0 x 0)))
-    @best))
+  (let [pivot? (boolean-array n false)]
+    (doseq [p pivots]
+      (aset pivot? (unchecked-int p) true))
+    (let [free-indices
+          (persistent!
+           (loop [i 0 acc (transient [])]
+             (if (>= i n)
+               acc
+               (recur (inc i) (if (aget pivot? i) acc (conj! acc i))))))
+          n-free (long (count free-indices))
+          free-idxs (int-array n-free)]
+      (dotimes [i n-free]
+        (aset free-idxs i (unchecked-int (free-indices i))))
+      (let [n-pivots (long (count pivot-rows))
+            coeffs (precompute-coeffs matrix pivot-rows free-indices)
+            best (volatile! Long/MAX_VALUE)]
+        (letfn [(search [^long idx ^longs x ^long sum]
+                  (if (>= idx n-free)
+                    (let [total (compute-total-fast coeffs n-pivots n-free x free-idxs sum)]
+                      (when (and (>= total 0) (< total @best))
+                        (vreset! best total)))
+                    (let [fi (aget free-idxs idx)
+                          max-v (long (min max-target (max 0 (dec (- @best sum)))))]
+                      (loop [v 0]
+                        (when (<= v max-v)
+                          (aset x fi v)
+                          (search (inc idx) x (unchecked-add sum v))
+                          (recur (inc v)))))))]
+          (let [x (long-array n 0)]
+            (search 0 x 0)))
+        @best))))
 
 (defn- min-joltage-presses
   "Find minimum button presses to reach joltage targets."
-  [{:keys [button-indices joltage]}]
-  (let [n (count button-indices)
-        matrix (build-ratio-matrix button-indices joltage)
-        rref (ratio-eliminate matrix)
-        sol (solve-unique rref n)]
-    (or sol (search-free-vars rref n (long (apply max joltage))))))
+  [{:keys [buttons joltage]}]
+  (let [n (count buttons)
+        matrix (build-double-matrix buttons joltage)
+        rref (double-eliminate matrix)
+        sol (solve-unique-double rref n)
+        max-target (reduce (fn [^long m ^long v] (if (> v m) v m)) 0 joltage)]
+    (or sol (search-free-vars rref n max-target))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Solution
@@ -318,7 +335,7 @@
 (defn part2
   "Sum of minimum button presses for all machines (joltage mode)."
   [input]
-  (reduce + 0 (pmap min-joltage-presses (parse input))))
+  (transduce (map min-joltage-presses) + (parse input)))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
