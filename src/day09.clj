@@ -264,24 +264,31 @@
                                   (aset pairs (+ idx 3) hy)
                                   (aset pairs (+ idx 4) area)
                                   (recur (inc j) (+ idx 5))))))))]
-    ;; Sort by area descending (simple selection for top few)
-    (let [sorted-idx (long-array pair-cnt)]
-      (dotimes [i pair-cnt] (aset sorted-idx i i))
-      ;; Sort indices by area descending
-      (let [idx-list (sort-by #(- (aget pairs (+ (* 5 %) 4))) (range pair-cnt))]
-        (loop [remaining idx-list]
-          (if (empty? remaining)
-            0
-            (let [pi (first remaining)
-                  base (* 5 pi)
-                  lx (aget pairs base)
-                  hx (aget pairs (inc base))
-                  ly (aget pairs (+ base 2))
-                  hy (aget pairs (+ base 3))
-                  area (aget pairs (+ base 4))]
-              (if (rect-inside? h-arr h-cnt v-arr v-cnt lx hx ly hy)
-                area
-                (recur (rest remaining))))))))))
+    ;; Process rectangles by area descending using a Java priority queue
+    (let [cmp (reify java.util.Comparator
+                (compare [_ a b]
+                  (let [ai (long a) bi (long b)
+                        aa (aget pairs (+ (* 5 ai) 4))
+                        ba (aget pairs (+ (* 5 bi) 4))]
+                    (Long/compare ba aa))))
+          ^java.util.PriorityQueue pq (java.util.PriorityQueue. (int pair-cnt) cmp)]
+      (dotimes [i pair-cnt]
+        (.add pq (long i)))
+      (loop [best (long 0)]
+        (if-let [pi (.poll pq)]
+          (let [pi (long pi)
+                base (* 5 pi)
+                area (aget pairs (+ base 4))]
+            (if (<= area best)
+              best
+              (let [lx (aget pairs base)
+                    hx (aget pairs (inc base))
+                    ly (aget pairs (+ base 2))
+                    hy (aget pairs (+ base 3))]
+                (if (rect-inside? h-arr h-cnt v-arr v-cnt lx hx ly hy)
+                  area
+                  (recur best)))))
+          best)))))
 
 ;; ─────────────────────────────────────────────────────────────
 ;; Tests
