@@ -217,11 +217,11 @@
                   (aset prow j (/ (aget prow j) pivot-val)))
                 (dotimes [r m]
                   (when (not= r row)
-                    (let [^doubles rr (aget mat r)
-                          factor (aget rr col)]
-                      (when (not (zero? factor))
-                        (dotimes [j (inc n)]
-                          (aset rr j (- (aget rr j) (* factor (aget prow j))))))))))
+	                    (let [^doubles rr (aget mat r)
+	                          factor (aget rr col)]
+	                      (when-not (zero? factor)
+	                        (dotimes [j (inc n)]
+	                          (aset rr j (- (aget rr j) (* factor (aget prow j))))))))))
               (recur (inc row) (inc col) (conj! pivots col)))))))))
 
 (def ^:private int-eps 1.0e-6)

@@ -116,12 +116,12 @@
                 (loop [d 1]
                   (cond
                     (> d (quot l 2)) true
-                    (zero? (mod l d))
-                    (let [sub (.substring p 0 d)]
-                      (if (= p (apply str (repeat (quot l d) sub)))
-                        false
-                        (recur (inc d))))
-                    :else (recur (inc d))))))]
+	                    (zero? (mod l d))
+	                    (let [sub (.substring p 0 d)]
+	                      (if (= p (str/join (repeat (quot l d) sub)))
+	                        false
+	                        (recur (inc d))))
+	                    :else (recur (inc d))))))]
       (sort
        (persistent!
         (reduce
