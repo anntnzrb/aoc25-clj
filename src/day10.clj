@@ -27,7 +27,7 @@
         pattern (subs target-str 1 (dec (count target-str)))
         target (reduce-kv (fn [m i c] (if (= c \#) (bit-set m i) m))
                           0 (vec pattern))
-        button-strs (into [] (take-while #(str/starts-with? ^String % "(") (rest parts)))
+        button-strs (vec (take-while #(str/starts-with? ^String % "(") (rest parts)))
         buttons (mapv (fn [^String s]
                         (reduce (fn [m n] (bit-set m (parse-long n)))
                                 0 (re-seq #"\d+" s)))
@@ -183,7 +183,7 @@
   [matrix]
   (let [m (count matrix)
         n (dec (count (first matrix)))]
-    (loop [mat (mapv #(mapv (fn [x] (/ x 1)) %) matrix)
+    (loop [mat (mapv #(mapv identity %) matrix)
            row 0
            col 0
            pivots []

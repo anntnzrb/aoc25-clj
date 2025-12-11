@@ -46,7 +46,7 @@
       (let [[x y z] (mapv parse-long (str/split (lines i) #","))
             idx (* 3 i)]
         (aset arr idx (long x))
-        (aset arr (+ idx 1) (long y))
+        (aset arr (inc idx) (long y))
         (aset arr (+ idx 2) (long z))))
     arr))
 
